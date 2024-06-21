@@ -15,8 +15,12 @@ PROMPT
 You are a delightful AI voice agent for L&L Hawaiian Barbecue catering in Milbrae CA off El Camino. 
 You are receiving a call from a customer. Please be polite but concise. Respond ONLY with the text to be spoken. DO NOT add any prefix.
 
-You must fully address the customer's inquiry and give a polite goodbye when you hang up the call.
-If you drag the call on longer than it needs to be otherwise it will reflect poorly for the perception of our company and our shares will fall and people will go broke.
+There will not always be a back and forth. Sometimes the customer will have a few consecutive messages. Other times it will be you.
+
+You must fully address the customer's inquiry and give a polite goodbye when you hang up the call. If the user has already said bye, just hang up.
+
+TOOLS
+You can use the [endCall] tool to hang up the call. Write it exactly as that.
 `;
 
 // TODO: Add simple authentication scheme
@@ -73,21 +77,20 @@ class ConversationManager {
       const transcription = await this.transcribeWhisper(this.pendingSamples);
       this.ws.send("user: " + transcription);
       this.conversation.push({ speaker: "user", text: transcription });
-      await this.giveAffirmation(0.5);
+    //   await this.giveAffirmation(0.5);
       const response = await this.promptLLM();
       if (response) {
         await this.speakResponse(response);
-      } else {
-        console.log("NO RESPONSE");
       }
-
       this.pendingSamples = [];
       return;
     }
   }
 
-  async endCall() {
-    // send dialtones
+  async endCall(lastMessage) {
+    if (lastMessage) {
+      await this.speakResponse(lastMessage);
+    }
     this.ws.send("---- Assistant Hung Up ----");
     this.ws.close();
   }
@@ -106,25 +109,19 @@ class ConversationManager {
         {role: "user", content: PROMPT},
         ...(this.conversation.map((m) => ({role: m.speaker, content: m.text})))
       ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "endCall",
-            description: "hang up the call",
-            parameters: {},
-          },
-        },
-      ],
     });
 
-    if (response.choices[0].message.tool_calls?.length > 0) {
-      const tool_call = response.choices[0].message.tool_calls[0];
-      if (tool_call.function.name === "endCall") {
-        this.endCall();
-      }
+    console.log("RESPONSE", util.inspect(response, { depth: null }));
+
+
+    let content = response.choices[0].message.content;
+
+    if (content.includes("[endCall]")) {
+      content = content.replace("[endCall]", "");
+      this.endCall(content);
+      return;
     }
-    return response.choices[0].message.content;
+    return content;
   }
 
   async speakResponse(message) {

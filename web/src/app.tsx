@@ -21,9 +21,9 @@ export default function App() {
   const streamer = useRef<Streamer | null>(null);
   const playback = useRef<Playback | null>(new Playback(new AudioContext(AudioContextSettings)));
 
-  const stopRecording = () => {
-    streamer.current?.stop();
-    playback.current?.stop();
+  const stopRecording = (graceful: boolean = false) => {
+    streamer.current?.stop(graceful);
+    playback.current?.stop(graceful);
     ws.current?.close();
     ws.current = null;
   };
@@ -48,7 +48,7 @@ export default function App() {
 
       ws.current.onclose = () => {
         logMessage("websocket closed");
-        stopRecording();
+        stopRecording(true);
       };
     }
   };
@@ -57,7 +57,7 @@ export default function App() {
     <>
       <h1>Demo</h1>
       <button onClick={startRecording}>Start Recording</button>
-      <button onClick={stopRecording}>Stop Recording</button>
+      <button onClick={() => stopRecording(false)}>Stop Recording</button>
       <Logs />
     </>
   );
@@ -151,7 +151,7 @@ class Streamer {
     });
   }
 
-  stop() {
+  stop(graceful: boolean = false) {
     this.audioContext?.suspend();
     this.stream?.getTracks().forEach((track) => {
       track.stop();
@@ -187,8 +187,16 @@ class Playback {
     this.audioContext.resume();
   }
 
-  stop() {
-    this.audioContext.suspend();
+  stop(graceful: boolean = false) {
+    if (graceful) {
+        if (this.samples.length > 0) {
+            return setTimeout(() => {
+                this.stop(true);
+            }, 1000);
+        }
+    } else {
+      this.audioContext.close();
+    }
   }
 
   addSamples(samples: Float32Array) {
