@@ -19,7 +19,7 @@ export default function App() {
   const [logMessage, Logs] = useLogs();
   const ws = useRef<WebSocket | null>(null);
   const streamer = useRef<Streamer | null>(null);
-  const playback = useRef<Playback | null>(new Playback(new AudioContext(AudioContextSettings)));
+  const playback = useRef<Playback | null>(null);
 
   const stopRecording = (graceful: boolean = false) => {
     streamer.current?.stop(graceful);
@@ -42,7 +42,8 @@ export default function App() {
       };
 
       logMessage("start recording", new Date());
-      playback.current?.start();
+      playback.current = new Playback(new AudioContext(AudioContextSettings));
+      playback.current.start();
       streamer.current = new Streamer(ws.current, logMessage);
       streamer.current.start();
 
@@ -116,11 +117,6 @@ class Streamer {
       },
       onSpeechEnd: (audio) => {
         logMessage("--- speech end");
-
-        // send in chunks of 1024
-        for (let i = 0; i < audio.length; i += 1024) {
-          ws.send(audio.slice(i, i + 1024));
-        }
         ws.send("end");
         this.userIsSpeaking = false;
       },
@@ -133,30 +129,29 @@ class Streamer {
       video: false,
       audio: true,
     };
+    navigator.mediaDevices.getUserMedia(constraints).then((stream) => {        
+      this.stream = stream;
+      const audioContext = new AudioContext({
+        sampleRate: 24000,
+      });
+      this.logMessage("audio context sample rate", audioContext.sampleRate);
+      const source = audioContext.createMediaStreamSource(stream);
+      this.logMessage("media stream source created");
+      const processor = audioContext.createScriptProcessor(1024, 1, 1);
+      processor.onaudioprocess = (event) => {
+        if (this.ws.readyState === WebSocket.OPEN && this.userIsSpeaking) {
+          this.ws.send(event.inputBuffer.getChannelData(0));
+        }
+      };
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+    });
     (await this.vadMic!).start();
 
-    // navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-    //   this.stream = stream;
-    //   this.vadMic?.start();
-    //   const audioContext = new AudioContext({
-    //     sampleRate: 24000,
-    //   });
-    //   this.logMessage("audio context sample rate", audioContext.sampleRate);
-    //   const source = audioContext.createMediaStreamSource(stream);
-    //   this.logMessage("media stream source created");
-    //   const processor = audioContext.createScriptProcessor(1024, 1, 1);
-    //   processor.onaudioprocess = (event) => {
-    //     if (this.ws.readyState === WebSocket.OPEN && this.userIsSpeaking) {
-    //       this.ws.send(event.inputBuffer.getChannelData(0));
-    //     }
-    //   };
-    //   source.connect(processor);
-    //   processor.connect(audioContext.destination);
-    // });
   }
 
   async stop(graceful: boolean = false) {
-    this.audioContext?.suspend();
+    this.audioContext?.close();
     this.stream?.getTracks().forEach((track) => {
       track.stop();
     });
