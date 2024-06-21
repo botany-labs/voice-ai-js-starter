@@ -6,7 +6,7 @@ const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
 
 
 const AudioContextSettings = {
-    sampleRate: 24000,
+    sampleRate: 16000,
     bitDepth: 16,
     numChannels: 1,
     echoCancellation: true,
@@ -102,62 +102,66 @@ const useLogs = () => {
 class Streamer {
   ws: WebSocket;
   stream: MediaStream | null = null;
-  vadMic: vad.MicVAD | null = null;
+  vadMic: Promise<vad.MicVAD> | null = null;
   audioContext: AudioContext | null = null;
   userIsSpeaking: boolean = false;
 
   constructor(ws: WebSocket, private logMessage: (...args: any[]) => void) {
     this.ws = ws;
 
-    vad.MicVAD.new({
+    this.vadMic = vad.MicVAD.new({
       onSpeechStart: () => {
         logMessage("--- speech start");
         this.userIsSpeaking = true;
       },
       onSpeechEnd: (audio) => {
         logMessage("--- speech end");
+
+        // send in chunks of 1024
+        for (let i = 0; i < audio.length; i += 1024) {
+          ws.send(audio.slice(i, i + 1024));
+        }
         ws.send("end");
         this.userIsSpeaking = false;
       },
-    }).then((vadMic) => {
-      this.vadMic = vadMic;
-    });
-
+    })
     this.audioContext = new AudioContext(AudioContextSettings);
   }
 
-  start() {
+  async start() {
     const constraints = {
       video: false,
       audio: true,
     };
-    navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-      this.stream = stream;
-      this.vadMic?.start();
-      const audioContext = new AudioContext({
-        sampleRate: 24000,
-      });
-      this.logMessage("audio context sample rate", audioContext.sampleRate);
-      const source = audioContext.createMediaStreamSource(stream);
-      this.logMessage("media stream source created");
-      const processor = audioContext.createScriptProcessor(1024, 1, 1);
-      processor.onaudioprocess = (event) => {
-        if (this.ws.readyState === WebSocket.OPEN && this.userIsSpeaking) {
-          this.ws.send(event.inputBuffer.getChannelData(0));
-        }
-      };
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-    });
+    (await this.vadMic!).start();
+
+    // navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+    //   this.stream = stream;
+    //   this.vadMic?.start();
+    //   const audioContext = new AudioContext({
+    //     sampleRate: 24000,
+    //   });
+    //   this.logMessage("audio context sample rate", audioContext.sampleRate);
+    //   const source = audioContext.createMediaStreamSource(stream);
+    //   this.logMessage("media stream source created");
+    //   const processor = audioContext.createScriptProcessor(1024, 1, 1);
+    //   processor.onaudioprocess = (event) => {
+    //     if (this.ws.readyState === WebSocket.OPEN && this.userIsSpeaking) {
+    //       this.ws.send(event.inputBuffer.getChannelData(0));
+    //     }
+    //   };
+    //   source.connect(processor);
+    //   processor.connect(audioContext.destination);
+    // });
   }
 
-  stop(graceful: boolean = false) {
+  async stop(graceful: boolean = false) {
     this.audioContext?.suspend();
     this.stream?.getTracks().forEach((track) => {
       track.stop();
     });
     this.stream = null;
-    this.vadMic?.pause();
+    (await this.vadMic!).pause();
   }
 }
 

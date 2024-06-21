@@ -2,6 +2,10 @@ const WebSocket = require("ws");
 const util = require("util");
 const fs = require("fs");
 const { OpenAI } = require("openai");
+const fetch = require("node-fetch");
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -77,7 +81,7 @@ class ConversationManager {
       const transcription = await this.transcribeWhisper(this.pendingSamples);
       this.ws.send("user: " + transcription);
       this.conversation.push({ speaker: "user", text: transcription });
-    //   await this.giveAffirmation(0.5);
+      await this.giveAffirmation(0.5);
       const response = await this.promptLLM();
       if (response) {
         await this.speakResponse(response);
@@ -124,9 +128,18 @@ class ConversationManager {
     return content;
   }
 
-  async speakResponse(message) {
-    const audio = await this._textToSpeech(message);
-    const audioBuf = await audio.arrayBuffer();
+  async speakResponse(message, provider='elevenlabs') {
+    let tts;
+    if (provider === 'elevenlabs') {
+      tts = elevenLabsTTS;
+    } else if (provider === 'openai') {
+      tts = openAITTS;
+    } else {
+        throw new Error(`Unknown TTS provider: ${provider}`);
+    }
+    
+    const audioBuf = await tts(message);
+
     const audioFloat32 = pcm16ToFloat32(new Int16Array(audioBuf));
     for (let i = 0; i < audioFloat32.length; i += 1024) {
       this.ws.send(audioFloat32.slice(i, i + 1024));
@@ -143,22 +156,12 @@ class ConversationManager {
     if (Math.random() < probability) {
       return;
     }
-    const affirmations = ["okay", "got it", "i see", "understood"];
+    const affirmations = ["Mm-hm", "Okay", "Got it", "I see", "Understood"];
     const randomIndex = Math.floor(Math.random() * affirmations.length);
     const affirmation = affirmations[randomIndex];
     await this.speakResponse(affirmation);
   }
 
-  async _textToSpeech(message) {
-    const response = await openai.audio.speech.create(
-      {
-        model: "tts-1",
-        voice: "shimmer",
-        input: message,
-        response_format: "pcm",
-      }    );
-    return response;
-  }
 
   async transcribeWhisper(inputs) {
     const samples = inputs.slice();
@@ -170,7 +173,8 @@ class ConversationManager {
     console.log("AUDIO LENGHT", audio.length);
     let pcm16 = float32ToPCM16(audio);
 
-    const sampleRate = 24000;
+    // TODO: Pass these in from client
+    const sampleRate = 16000;
     const bitDepth = 16;
     const numChannels = 1;
 
@@ -263,3 +267,62 @@ function appendBuffer(buffer, data) {
 
     return Buffer.from(buffer);
   }
+
+
+  const elevenLabsTTS = async (message) => {
+
+    const voice_id = "EXAVITQu4vr4xnSDxMaL" // sarah pre-made;
+    // const model_id = "eleven_turbo_v2";
+    const model_id = "eleven_monolingual_v1";
+
+
+    const body = {
+        text: message,
+        model_id,
+        voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.8,
+            style: 0,
+        },
+    }
+
+    const query = {
+        output_format: "pcm_16000",
+
+    }
+    const options = {
+        method: 'POST',
+        headers: {'xi-api-key': process.env.ELEVEN_LABS_API_KEY, 'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      };
+
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}?${new URLSearchParams(query)}`, options);
+
+      if (response.status !== 200) {
+        console.error("Failed to generate audio", response.status, response.statusText, util.inspect(await response.json(), {depth: null, colors: true}));
+        return;
+      }
+
+      // Simplify
+      const arrayBuffer = await response.arrayBuffer();
+      const audio = new Int16Array(arrayBuffer);
+      
+      return audio;
+  }
+
+
+
+  const openAITTS = async (message) => {
+    const response = await openai.audio.speech.create(
+        {
+        model: "tts-1",
+        voice: "shimmer",
+        input: message,
+        response_format: "pcm",
+        }    );
+    
+    const arrayBuffer = await response.arrayBuffer();
+    
+    return arrayBuffer;
+  }
+
