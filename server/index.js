@@ -13,17 +13,7 @@ server.on("connection", (ws, req) => {
 
   ws.binaryType = "arraybuffer";
 
-  ws.on("message", (message) => {
-    ws.send(message);
-    // console.log(`Received message: ${message}`);
-    // Echo the message back to the client
-    // ws.send(`Server received: ${message}`);
-    // const messageArray = new Int32Array(message);
-    // console.log("Server received", messageArray.length);
-    // // buffer.push(messageArray);
-    // ws.send(messageArray);
-
-  });
+  new ConversationManager(ws);
 
   ws.on("close", () => {
     console.log("Client disconnected", cid);
@@ -35,6 +25,30 @@ server.on("connection", (ws, req) => {
 });
 
 
-
 console.log(`WebSocket server is running on ws://localhost:${PORT}`);
+
+
+class ConversationManager {
+  constructor(ws) {
+    this.ws = ws;
+    this.conversation = []
+    this.rawAudioBuffer = []
+
+    this.ws.on("message", this.onMessage.bind(this));
+  }
+
+  onMessage(rawAudio) {
+
+    const audio = new Float32Array(rawAudio);
+    this.rawAudioBuffer.push(audio);
+
+    // chunk into 1024 sizes and send out
+    for (let i = 0; i < audio.length; i += 1024) {
+      this.ws.send(audio.slice(i, i + 1024));
+    }
+    
+  }
+
+
+}
 

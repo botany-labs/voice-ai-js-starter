@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
+import * as vad from "@ricky0123/vad-web";
 
 const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
 
 export default function App() {
     const [logMessage, Logs] = useLogs();
     const ws = useRef<WebSocket|null>(null);
-    const playback = useRef<Playback|null>(new Playback(new AudioContext()));
+    const playback = useRef<Playback|null>(new Playback({sampleRate: 16000}));
 
     const stopRecording = () => {
         playback.current?.stop();
@@ -25,24 +26,38 @@ export default function App() {
             logMessage("start recording", new Date());
             playback.current?.start();
 
-            // Use navigator to get user media audio
-            const constraints = {
-                video: false,
-                audio: true,
-            };
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            const audioContext = new AudioContext();
-            logMessage("audio context sample rate", audioContext.sampleRate);
-            const source = audioContext.createMediaStreamSource(stream);
-            logMessage("media stream source created");
-            const processor = audioContext.createScriptProcessor(1024, 1, 1);
-            processor.onaudioprocess = (event) => {
-                if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-                    ws.current.send(event.inputBuffer.getChannelData(0));
-                }
-            };
-            source.connect(processor);
-            processor.connect(audioContext.destination);
+            const vadMic = await vad.MicVAD.new({
+                onSpeechStart: () => {
+                    logMessage("speech start");
+                },
+                onSpeechEnd: (audio) => {
+                    logMessage("speech end");
+                    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+                        ws.current.send(audio);
+                    }
+                },
+            })
+
+            vadMic.start();
+
+            // // Use navigator to get user media audio
+            // const constraints = {
+            //     video: false,
+            //     audio: true,
+            // };
+            // const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // const audioContext = new AudioContext();
+            // logMessage("audio context sample rate", audioContext.sampleRate);
+            // const source = audioContext.createMediaStreamSource(stream);
+            // logMessage("media stream source created");
+            // const processor = audioContext.createScriptProcessor(1024, 1, 1);
+            // processor.onaudioprocess = (event) => {
+            //     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+            //         ws.current.send(event.inputBuffer.getChannelData(0));
+            //     }
+            // };
+            // source.connect(processor);
+            // processor.connect(audioContext.destination);
         }
     };
 
@@ -83,10 +98,12 @@ const useLogs = () => {
 class Playback {
 
     samples: Float32Array[] = [];
+    audioContext: AudioContext;
 
-    constructor(private audioContext: AudioContext) {
-        audioContext.suspend();
-        const scriptNode = audioContext.createScriptProcessor(1024, 1, 1);
+    constructor({sampleRate}: {sampleRate: number}) {
+        this.audioContext = new AudioContext({sampleRate});
+        this.audioContext.suspend();
+        const scriptNode = this.audioContext.createScriptProcessor(1024, 1, 1);
         scriptNode.onaudioprocess = (event) => {
 
             if (this.samples.length > 0) {
@@ -98,10 +115,10 @@ class Playback {
             }
         };
 
-        const gainNode = audioContext.createGain();
+        const gainNode = this.audioContext.createGain();
         gainNode.gain.value = 0.5;
         scriptNode.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        gainNode.connect(this.audioContext.destination);
     }
 
 
