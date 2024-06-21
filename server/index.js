@@ -13,9 +13,6 @@ server.on("connection", (ws, req) => {
 
   ws.binaryType = "arraybuffer";
 
-
-  let playBackBuffer = [];
-
   ws.on("message", (message) => {
     ws.send(message);
     // console.log(`Received message: ${message}`);
