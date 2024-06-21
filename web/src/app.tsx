@@ -5,8 +5,10 @@ const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
 export default function App() {
     const [logMessage, Logs] = useLogs();
     const ws = useRef<WebSocket|null>(null);
+    const playback = useRef<Playback|null>(new Playback(new AudioContext()));
 
     const stopRecording = () => {
+        playback.current?.stop();
         ws.current?.close();
         ws.current = null;
     };
@@ -17,21 +19,11 @@ export default function App() {
             ws.current.binaryType = "arraybuffer";
 
             ws.current.onmessage = (event) => {
-
-                const buffer = new Int32Array(event.data);
-                // Play it out
-                const audioContext = new AudioContext();
-                const source = audioContext.createBufferSource();
-                source.buffer = audioContext.createBuffer(2, buffer.length, 48000);
-                source.buffer.getChannelData(0).set(buffer);
-                // introduce latency node
-                const latencyNode = audioContext.createDelay(1)
-                source.connect(latencyNode);
-                latencyNode.connect(audioContext.destination);
-                source.start();
+                playback.current?.addSamples(new Float32Array(event.data));
             };
 
             logMessage("start recording", new Date());
+            playback.current?.start();
 
             // Use navigator to get user media audio
             const constraints = {
@@ -45,7 +37,9 @@ export default function App() {
             logMessage("media stream source created");
             const processor = audioContext.createScriptProcessor(1024, 1, 1);
             processor.onaudioprocess = (event) => {
-                ws.current?.send(event.inputBuffer.getChannelData(0))
+                if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+                    ws.current.send(event.inputBuffer.getChannelData(0));
+                }
             };
             source.connect(processor);
             processor.connect(audioContext.destination);
@@ -84,4 +78,43 @@ const useLogs = () => {
     return [logMessage, logDisplay] as const;
 };
 
+
+
+class Playback {
+
+    samples: Float32Array[] = [];
+
+    constructor(private audioContext: AudioContext) {
+        audioContext.suspend();
+        const scriptNode = audioContext.createScriptProcessor(1024, 1, 1);
+        scriptNode.onaudioprocess = (event) => {
+
+            if (this.samples.length > 0) {
+                event.outputBuffer.getChannelData(0).set(this.samples[0]);
+                this.samples.shift();
+            } else {
+                const silence = new Float32Array(1024);
+                event.outputBuffer.getChannelData(0).set(silence);
+            }
+        };
+
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0.5;
+        scriptNode.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+    }
+
+
+    start() {
+        this.audioContext.resume();
+    }
+
+    stop() {
+        this.audioContext.suspend();
+    }
+
+    addSamples(samples: Float32Array) {
+        this.samples.push(samples);
+    }
+}
 
