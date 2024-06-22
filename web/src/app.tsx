@@ -6,7 +6,7 @@ const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
 
 
 const AudioContextSettings = {
-    sampleRate: 16000,
+    sampleRate: 24000,
     bitDepth: 16,
     numChannels: 1,
     echoCancellation: true,
