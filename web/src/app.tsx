@@ -1,11 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as vad from "@ricky0123/vad-web";
-import "./app.css";
 
 const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
 
 const END_OF_SPEECH_TOKEN = "EOS";
 
+// These are shared between streamer and playback but 
+// we are using float32arrays of pcm 24k 16bit mono
 const AudioContextSettings = {
     sampleRate: 24000,
     bitDepth: 16,
@@ -19,10 +20,12 @@ const AudioContextSettings = {
 export default function App() {
   const [logMessage, Logs] = useLogs();
   const ws = useRef<WebSocket | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const streamer = useRef<Streamer | null>(null);
   const playback = useRef<Playback | null>(null);
 
   const stopRecording = (graceful: boolean = false) => {
+    setIsRecording(false);
     streamer.current?.stop(graceful);
     playback.current?.stop(graceful);
     ws.current?.close();
@@ -47,6 +50,7 @@ export default function App() {
       playback.current.start();
       streamer.current = new Streamer(ws.current, logMessage);
       streamer.current.start();
+      setIsRecording(true);
 
       ws.current.onclose = () => {
         logMessage("websocket closed");
@@ -56,31 +60,45 @@ export default function App() {
   };
 
   return (
-    <>
-      <h1>Demo</h1>
-      <button onClick={startRecording}>Start Recording</button>
-      <button onClick={() => stopRecording(false)}>Stop Recording</button>
+    <main className="flex flex-col h-screen w-full max-w-lg mx-auto text-yellow-300 px-4 py-8">
+      <h1 className="text-xl font-bold mx-2 my-2"> charlesyu108/voiceai-js-starter demo</h1>
+      <div className="my-8 flex">
+      {isRecording ? (
+        <button onClick={() => stopRecording(false)} className="mx-auto w-1/2 bg-red-500 font-bold text-white px-4 py-2 rounded-md">Hang Up</button>
+      ) : (
+        <button onClick={startRecording} className="mx-auto w-1/2 bg-yellow-300 text-black font-bold px-4 py-2 rounded-md">Begin Call</button>
+      )}
+      </div>
       <Logs />
-    </>
+    </main>
   );
 }
 
-const Logs = ({ logLines }: { logLines: JSX.Element[] }) => {
-  return (
-    <>
-      <h1> Logs </h1>
-      <div className="scrollingDisplay">
-        {logLines.map((line, index) => (
-          <p key={index}>{line}</p>
-        ))}
-      </div>
-    </>
-  );
-};
+const Logs = ({ logLines, clearLogs }: { logLines: JSX.Element[], clearLogs: () => void }) => {
+  
+    return (
+      <>
+        <div className="flex w-full justify-between">
+          <h1 className="text-xl font-bold mx-2 my-2"> Logs </h1>
+          <button onClick={clearLogs} className=" border-yellow-300 border px-4 my-1 rounded-md"> Clear </button>
+        </div>
+        <div className="border-yellow-300 overflow-y-auto hover:justify-normal flex flex-col justify-end py-2 px-1 font-mono text-green-300 rounded-md border-2 min-h-[200px] max-h-1/2">
+          {logLines.map((line, index) => (
+            <p key={index}>{line}</p>
+          ))}
+        </div>
+      </>
+    );
+  };
 
 const useLogs = () => {
   const [logs, setLogs] = useState<{ time: Date; message: string }[]>([]);
   const logsRef = useRef<{ time: Date; message: string }[]>([]);
+
+  const clearLogs = () => {
+    logsRef.current = [];
+    setLogs([]);
+  };
 
   const logMessage = (...args: any[]) => {
     const time = new Date();
@@ -96,7 +114,7 @@ const useLogs = () => {
         <b>[{log.time.toLocaleTimeString()}]</b> {log.message}
       </p>
     ));
-    return <Logs logLines={logLines} />;
+    return <Logs logLines={logLines} clearLogs={clearLogs} />;
   };
   return [logMessage, logDisplay] as const;
 };
@@ -104,6 +122,7 @@ const useLogs = () => {
 class Streamer {
   ws: WebSocket;
   stream: MediaStream | null = null;
+  processor: ScriptProcessorNode | null = null;
   vadMic: Promise<vad.MicVAD> | null = null;
   audioContext: AudioContext | null = null;
   userIsSpeaking: boolean = false;
@@ -113,11 +132,11 @@ class Streamer {
 
     this.vadMic = vad.MicVAD.new({
       onSpeechStart: () => {
-        logMessage("--- speech start");
+        logMessage("--- vad: speech start");
         this.userIsSpeaking = true;
       },
       onSpeechEnd: (audio) => {
-        logMessage("--- speech end");
+        logMessage("--- vad: speech end");
         ws.send(END_OF_SPEECH_TOKEN);
         this.userIsSpeaking = false;
       },
@@ -127,7 +146,6 @@ class Streamer {
 
   async start() {
     const constraints = {
-      video: false,
       audio: true,
     };
     navigator.mediaDevices.getUserMedia(constraints).then((stream) => {        
@@ -138,14 +156,14 @@ class Streamer {
       this.logMessage("audio context sample rate", audioContext.sampleRate);
       const source = audioContext.createMediaStreamSource(stream);
       this.logMessage("media stream source created");
-      const processor = audioContext.createScriptProcessor(1024, 1, 1);
-      processor.onaudioprocess = (event) => {
+      this.processor = audioContext.createScriptProcessor(1024, 1, 1);
+      this.processor.onaudioprocess = (event) => {
         if (this.ws.readyState === WebSocket.OPEN && this.userIsSpeaking) {
           this.ws.send(event.inputBuffer.getChannelData(0));
         }
       };
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+      source.connect(this.processor);
+      this.processor.connect(audioContext.destination);
     });
     (await this.vadMic!).start();
 
@@ -153,11 +171,15 @@ class Streamer {
 
   async stop(graceful: boolean = false) {
     this.audioContext?.suspend();
+
     this.stream?.getTracks().forEach((track) => {
       track.stop();
+      this.stream?.removeTrack(track);
     });
-    this.stream = null;
-    (await this.vadMic!).pause();
+    this.processor && (this.processor.onaudioprocess = null);
+    const vadMic = await this.vadMic;
+    vadMic && vadMic.destroy();
+    this.vadMic = null;
   }
 }
 
