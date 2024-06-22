@@ -3,6 +3,8 @@ const { EventEmitter } = require("events");
 const { generateBeep } = require("./audio");
 
 const END_OF_SPEECH_TOKEN = "EOS";
+const INTERRUPT_TOKEN = "INT";
+const CLEAR_BUFFER_TOKEN = "CLR";
 
 /**
  * CallConversation represents a conversation between a user and an assistant.
@@ -26,6 +28,9 @@ class CallConversation {
       this.addToCallLog("CALL_ENDED");
       this.onEnd && this.onEnd(this.callLog);
     });
+    this.call.on(INTERRUPT_TOKEN, () => {
+      this.addToCallLog("INTERRUPTED");
+    });
     this.addToCallLog("INIT", {
       assistant: JSON.stringify(this.assistant),
     });
@@ -43,24 +48,16 @@ class CallConversation {
       this.startListening();
       this.addToCallLog("READY");
       this.call.pushMeta("---- Assistant Ready ----");
+
       if (this.assistant.speakFirst) {
-        if (this.assistant.speakFirstOpeningMessage) {
-          this.noteWhatWasSaid(
-            "assistant",
-            this.assistant.speakFirstOpeningMessage
-          );
-          const audio = await this.assistant.textToSpeech(
-            this.assistant.speakFirstOpeningMessage
-          );
-          this.call.pushAudio(audio);
-        } else {
+        let firstMessage = this.assistant.speakFirstOpeningMessage;
+        if (!firstMessage) {
           const { content } = await this.assistant.createResponse(this.history);
-          if (content) {
-            this.noteWhatWasSaid("assistant", content);
-            const audio = await this.assistant.textToSpeech(content);
-            this.call.pushAudio(audio);
-          }
+          firstMessage = content;
         }
+        this.noteWhatWasSaid("assistant", firstMessage);
+        const audio = await this.assistant.textToSpeech(firstMessage);
+        this.call.pushAudio(audio);
       }
     }, delay);
   }
@@ -69,11 +66,11 @@ class CallConversation {
    * Starts listening for user messages.
    */
   startListening() {
+
     this.call.on("userMessage", async (message) => {
+      this.call.pushMeta(CLEAR_BUFFER_TOKEN);
       this.noteWhatWasSaid("user", message);
-
-      // TODO: Implement interruptions
-
+      
       const utterance = await this.assistant.createUtterance();
       if (utterance) {
         this.noteWhatWasSaid("assistant", utterance);
@@ -199,11 +196,15 @@ class WebCall extends EventEmitter {
   async _handleWebsocket_Meta(message) {
     let messageString = message.toString();
     if (messageString === END_OF_SPEECH_TOKEN) {
-      const transcription = await this.stt.transcribe(this.pendingSamples);
-      this.emit("userMessage", transcription);
+      if (!this.pendingSamples.length) {
+        const transcription = await this.stt.transcribe(this.pendingSamples);
+        this.emit("userMessage", transcription);
       this.pendingSamples = [];
+      }
+      console.warn("GOT EOS but no audio");
       return;
     }
+    this.emit(message);
     console.error("Unknown message type:", message);
   }
 

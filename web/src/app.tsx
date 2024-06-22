@@ -4,6 +4,8 @@ import * as vad from "@ricky0123/vad-web";
 const SERVER_WS_URL = process.env.REACT_APP_SERVER_WS_URL ?? "ws://localhost:8000";
 
 const END_OF_SPEECH_TOKEN = "EOS";
+const INTERRUPT_TOKEN = "INT";
+const CLEAR_BUFFER_TOKEN = "CLR";
 
 // These are shared between streamer and playback but 
 // we are using float32arrays of pcm 24k 16bit mono
@@ -38,9 +40,16 @@ export default function App() {
       ws.current = new WebSocket(SERVER_WS_URL);
       ws.current.binaryType = "arraybuffer";
       ws.current.onopen = () => {
-        ws.current && (ws.current.onmessage = (event) => {
+        ws.current && (ws.current.onmessage = async(event) => {
             if (event.data instanceof ArrayBuffer) {
               playback.current?.addSamples(new Float32Array(event.data));
+            } else if (event.data === CLEAR_BUFFER_TOKEN) {
+              logMessage("clear buffer");
+              const didInterrupt  = await playback.current?.clear();
+              if (didInterrupt) {
+                logMessage("sent did interrupt", didInterrupt);
+                ws.current && ws.current.send(INTERRUPT_TOKEN);
+              }
             } else {
               logMessage(event.data);
             }
@@ -211,6 +220,14 @@ class Playback {
     gainNode.gain.value = 0.5;
     scriptNode.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
+  }
+
+  async clear() {
+    await this.audioContext.suspend();
+    const dirty = this.samples.length > 0;
+    this.samples = [];
+    await this.audioContext.resume();
+    return dirty;
   }
 
   start() {
