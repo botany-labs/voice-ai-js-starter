@@ -77,8 +77,6 @@ class CallConversation {
         this.call.pushAudio(audio);
       }
 
-      // create a response
-      // {words, tools}
       const { content, selectedTool } = await this.assistant.createResponse(
         this.history
       );
@@ -100,6 +98,10 @@ class CallConversation {
         this.call.end();
         this.call.off("userMessage", this.startListening);
         return;
+      }
+      else if (selectedTool) {
+        // TODO: implement custom tools
+        console.warn("[CUSTOM TOOLS NOT YET SUPPORTED] Unhandled tool:", selectedTool);
       }
     });
   }
