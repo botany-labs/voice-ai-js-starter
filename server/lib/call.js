@@ -67,6 +67,9 @@ class CallConversation {
   startListening() {
     this.call.on("userMessage", async (message) => {
       this.noteWhatWasSaid("user", message);
+
+      // TODO: Implement interruptions
+
       const utterance = await this.assistant.createUtterance();
       if (utterance) {
         this.noteWhatWasSaid("assistant", utterance);

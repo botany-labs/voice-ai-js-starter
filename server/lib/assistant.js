@@ -7,6 +7,8 @@ const openai = new OpenAI({
 
 /**
  * Defines an AI call assistant.
+ * 
+ * TODO: Support custom tools
  */
 class Assistant {
   /**

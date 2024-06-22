@@ -18,10 +18,9 @@ const LnlCustomerSupport = new Assistant(
     You must fully address the customer's inquiry and give a polite goodbye when you hang up the call. 
     If the user has already said bye, just hang up.`,
   {
-    // voiceModel: "elevenlabs/eleven_turbo_v2",
-    // voiceName: "EXAVITQu4vr4xnSDxMaL",
-    voiceModel: "openai/tts-1-hd",
-    voiceName: "shimmer",
+    speakFirstOpeningMessage: "L&L Hawaiian Barbecue, El Camino. How can I help you today?",
+    voiceModel: "openai/tts-1",
+    voiceName: "alloy",
   }
 );
 
@@ -36,7 +35,7 @@ server.on("connection", (ws, req) => {
         console.log("----- CALL LOG -----");
         console.log(callLogs);
     };
-    conversation.begin();
+    conversation.begin(1000);
 
     ws.on("close", () => {
         console.log("Client disconnected", cid);
