@@ -33,28 +33,33 @@ export default function App() {
   };
 
   const startRecording = async () => {
+    setIsRecording(true);
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       ws.current = new WebSocket(SERVER_WS_URL);
       ws.current.binaryType = "arraybuffer";
-
-      ws.current.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-          playback.current?.addSamples(new Float32Array(event.data));
-        } else {
-          logMessage(event.data);
-        }
+      ws.current.onopen = () => {
+        ws.current && (ws.current.onmessage = (event) => {
+            if (event.data instanceof ArrayBuffer) {
+              playback.current?.addSamples(new Float32Array(event.data));
+            } else {
+              logMessage(event.data);
+            }
+          });
+    
+          logMessage("start recording", new Date());
+          playback.current = new Playback(new AudioContext(AudioContextSettings));
+          playback.current.start();
+          streamer.current = new Streamer(ws.current!, logMessage);
+          streamer.current.start();
+    
+          ws.current && (ws.current.onclose = () => {
+            logMessage("websocket closed");
+            stopRecording(true);
+          });
       };
 
-      logMessage("start recording", new Date());
-      playback.current = new Playback(new AudioContext(AudioContextSettings));
-      playback.current.start();
-      streamer.current = new Streamer(ws.current, logMessage);
-      streamer.current.start();
-      setIsRecording(true);
-
-      ws.current.onclose = () => {
-        logMessage("websocket closed");
-        stopRecording(true);
+      ws.current.onerror = (event) => {
+        logMessage("websocket error", event);
       };
     }
   };

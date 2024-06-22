@@ -26,16 +26,16 @@ class Assistant {
    */
   constructor(instructions, options = {}) {
     this.instructions = instructions;
-    this.systemPrompt = options.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+    this.systemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     this.tools = options.canHangUp === false ? TOOLS_NONE : TOOL_HANG_UP; // NOTE: only tool supported right now is hang-up
-    this.speakFirst = options.speakFirst || true;
+    this.speakFirst = options.speakFirst ?? true;
     this.speakFirstOpeningMessage = options.speakFirstOpeningMessage;
-    this.utterances = options.utterances || DEFAULT_UTTERANCES;
+    this.utterances = options.utterances ?? DEFAULT_UTTERANCES;
     this.utteranceProbability =
-      options.utteranceProbability || DEFAULT_UTTERANCE_PROBABILITY;
-    this.llmModel = options.llmModel || "gpt-3.5-turbo";
-    this.voiceModel = options.voiceModel || "openai/tts-1";
-    this.voiceName = options.voiceName || "shimmer";
+      options.utteranceProbability ?? DEFAULT_UTTERANCE_PROBABILITY;
+    this.llmModel = options.llmModel ?? "gpt-3.5-turbo";
+    this.voiceModel = options.voiceModel ?? "openai/tts-1";
+    this.voiceName = options.voiceName ?? "shimmer";
     this.tts = new TextToSpeech(this.voiceModel, this.voiceName);
   }
 
