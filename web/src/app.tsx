@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import * as vad from "@ricky0123/vad-web";
 
-const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
+const SERVER_WS_URL = process.env.REACT_APP_SERVER_WS_URL ?? "ws://localhost:8000";
 
 const END_OF_SPEECH_TOKEN = "EOS";
 
@@ -61,7 +61,10 @@ export default function App() {
 
   return (
     <main className="flex flex-col h-screen w-full max-w-lg mx-auto text-yellow-300 px-4 py-8">
-      <h1 className="text-xl font-bold mx-2 my-2"> charlesyu108/voiceai-js-starter demo</h1>
+        <div className="flex justify-center flex-col">
+            <h1 className="text-xl font-bold"> charlesyu108/voiceai-js-starter demo</h1>
+            <p className="text-sm">For best results, use headphones.</p>
+        </div>
       <div className="my-8 flex">
       {isRecording ? (
         <button onClick={() => stopRecording(false)} className="mx-auto w-1/2 bg-red-500 font-bold text-white px-4 py-2 rounded-md">Hang Up</button>
