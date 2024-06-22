@@ -26,10 +26,11 @@ server.on("connection", (ws, req) => {
   console.log("New client connected", cid);
   ws.binaryType = "arraybuffer";
 
-  const conversation = new CallConversation(LnlCustomerSupport, ws, () => {
+  const onCallEnd = () => {
     console.log("----- CALL LOG -----");
     console.log(conversation.callLog);
-  });
+  };
+  const conversation = new CallConversation(LnlCustomerSupport, ws, onCallEnd);
   conversation.begin();
 
   ws.on("close", () => {
