@@ -11,7 +11,7 @@ class CallConversation {
    * Constructor
    * @param {Assistant} assistant - Assistant to use for the conversation.
    * @param {WebSocket} ws - Websocket to use for the conversation.
-   * @param {() => void} onEnd - Function to call when the conversation ends.
+   * @param {(callLogs: Array<{timestamp: string, event: string, meta: object}>) => void} onEnd - Function to call when the conversation ends.
    */
   constructor(assistant, ws, onEnd=()=>{}) {
     this.assistant = assistant;
@@ -21,7 +21,7 @@ class CallConversation {
     this.onEnd = onEnd;
     this.call.on("callEnded", () => {
       this.addToCallLog("CALL_ENDED");
-      this.onEnd && this.onEnd();
+      this.onEnd && this.onEnd(this.callLog);
     });
     this.addToCallLog("INIT", {
       assistant: JSON.stringify(this.assistant),

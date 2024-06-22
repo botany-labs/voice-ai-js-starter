@@ -1,4 +1,5 @@
 const { TextToSpeech } = require("./speech");
+const { CallConversation } = require("./call");
 const OpenAI = require("openai");
 /**
  * Defines an AI call assistant.
@@ -14,8 +15,8 @@ class Assistant {
    * @param {string} [options.speakFirstOpeningMessage] - Opening message to give your assistant to say once the call starts. If not provided, the assistant will just be prompted to speak.
    * @param {string} [options.speakFirst] - Speak first? Defaults to true.
    * @param {string} [options.canHangUp] - Can hang up? Defaults to true.
-   * @param {string[]} [options.utterances] - Affirmations to give your assistant. Defaults to ["Mm-hm", "Got it.", "Understood.", "I see.", "Okay."]
-   * @param {number} [options.utteranceProbability] - Probability of utterance. Defaults to 0.5
+   * @param {string[]} [options.utterances] - Affirmations to give your assistant. Defaults to `DEFAULT_UTTERANCES`
+   * @param {number} [options.utteranceProbability] - Probability of utterance. Defaults to `DEFAULT_UTTERANCE_PROBABILITY`
    */
   constructor(instructions, options = {}) {
     this.instructions = instructions;
@@ -107,6 +108,11 @@ class Assistant {
 
   async textToSpeech(content) {
     return this.tts.synthesize(content);
+  }
+
+  // Create a conversation with this assistant
+  createConversation(ws) {
+    return new CallConversation(this, ws);
   }
 }
 
