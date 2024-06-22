@@ -59,7 +59,7 @@ function createWavHeader(sampleRate, numChannels, bytesPerSample, dataSize) {
 }
 
 function generateBeep(frequency, durationSeconds, sampleRate) {
-    const volume = 0.2;
+    const volume = 0.07;
     const numSamples = sampleRate * durationSeconds;
     const buffer = new Float32Array(numSamples);
     for (let i = 0; i < numSamples; i++) {
