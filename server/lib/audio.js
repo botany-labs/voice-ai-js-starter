@@ -58,8 +58,19 @@ function createWavHeader(sampleRate, numChannels, bytesPerSample, dataSize) {
   return Buffer.from(buffer);
 }
 
+function generateBeep(frequency, durationSeconds, sampleRate) {
+    const volume = 0.2;
+    const numSamples = sampleRate * durationSeconds;
+    const buffer = new Float32Array(numSamples);
+    for (let i = 0; i < numSamples; i++) {
+      buffer[i] = Math.sin(2 * Math.PI * frequency * (i / sampleRate)) * volume;
+    }
+    return buffer;
+}
+
 module.exports = {
   float32ToPCM16,
   pcm16ToFloat32,
   createWavHeader,
+  generateBeep,
 };

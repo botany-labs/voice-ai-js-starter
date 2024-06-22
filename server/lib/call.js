@@ -1,5 +1,6 @@
 const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
+const { generateBeep } = require("./audio");
 
 const END_OF_SPEECH_TOKEN = "EOS";
 
@@ -34,7 +35,10 @@ class CallConversation {
    * Begins the conversation.
    * @param {number} delay - Delay in milliseconds before starting to listen for user messages.
    */
-  async begin(delay = 0) {
+  async begin(delay = 0, beep = true) {
+    if (beep) {
+      this.call.pushAudio(generateBeep(440, 0.5, 24000));
+    }
     setTimeout(async () => {
       this.startListening();
       this.addToCallLog("READY");
@@ -180,6 +184,7 @@ class WebCall extends EventEmitter {
    * Ends the call.
    */
   async end() {
+    this.pushAudio(generateBeep(180, 0.5, 24000));
     this.ws.close();
   }
 
