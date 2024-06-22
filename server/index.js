@@ -20,6 +20,8 @@ const LnlCustomerSupport = new Assistant(
   {
     // voiceModel: "elevenlabs/eleven_turbo_v2",
     // voiceName: "EXAVITQu4vr4xnSDxMaL",
+    voiceModel: "openai/tts-1-hd",
+    voiceName: "shimmer",
   }
 );
 

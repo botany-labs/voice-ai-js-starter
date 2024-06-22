@@ -3,11 +3,15 @@ const OpenAI = require("openai");
 const util = require("util");
 const { float32ToPCM16, pcm16ToFloat32, createWavHeader } = require("./audio");
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const TTS_MODELS = [
   "elevenlabs/eleven_monolingual_v1",
   "elevenlabs/eleven_turbo_v2",
   "openai/tts-1",
+  "openai/tts-1-hd",
 ];
 
 const STT_MODELS = [
@@ -46,7 +50,7 @@ class TextToSpeech {
    * @returns {Promise<Float32Array>} - The audio data - PCM. 24k sample rate, 16 bit depth, 1 channel
    */
   async synthesize(message) {
-    const pcm = await this.tts(message, this.model, this.voice);
+    const pcm = new Int16Array(await this.tts(message, this.model, this.voice));
     return pcm16ToFloat32(pcm);
   }
 
@@ -105,9 +109,6 @@ async function tts_elevenlabs(message, model, voice) {
 }
 
 async function tts_openai(message, model, voice) {
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
   const response = await openai.audio.speech.create({
     model,
     voice,
@@ -140,9 +141,6 @@ class SpeechToText {
 }
 
 async function transcribeWhisper(audioSamples) {
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
   const samples = audioSamples.slice();
   // join pending samples
   const audio = new Float32Array(samples.length * 1024);

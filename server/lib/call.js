@@ -1,6 +1,8 @@
 const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
 
+const END_OF_SPEECH_TOKEN = "EOS";
+
 /**
  * CallConversation represents a conversation between a user and an assistant.
  * It listens for user messages, sends assistant messages, and handles tool selections.
@@ -15,7 +17,7 @@ class CallConversation {
    */
   constructor(assistant, ws, onEnd=()=>{}) {
     this.assistant = assistant;
-    this.call = new Call(ws);
+    this.call = new WebCall(ws);
     this.history = assistant.prompt;
     this.callLog = [];
     this.onEnd = onEnd;
@@ -86,7 +88,7 @@ class CallConversation {
 
       if (selectedTool) {
         this.addToCallLog("TOOL_SELECTED", {
-          tool: selectedTool.name,
+          tool: selectedTool
         });
       }
 
@@ -124,7 +126,7 @@ exports.CallConversation = CallConversation;
 
 
 /**
- * Call represents a light wrapper around a websocket connection that listens for audio and meta data.
+ * WebCall represents a light wrapper around a websocket connection that listens for audio and meta data.
  * Subscribe to the 'userMessage' event to get the transcribed audio.
  * Subscribe to the 'callEnded' event to get notified when the call has ended.
  *
@@ -135,7 +137,7 @@ exports.CallConversation = CallConversation;
  *                   Handler: () => void
  * 
  * */
-class Call extends EventEmitter {
+class WebCall extends EventEmitter {
   /**
    * Constructor
    * @param {WebSocket} ws - Websocket to use for the call.
@@ -186,7 +188,7 @@ class Call extends EventEmitter {
 
   async _handleWebsocket_Meta(message) {
     let messageString = message.toString();
-    if (messageString === "end") {
+    if (messageString === END_OF_SPEECH_TOKEN) {
       const transcription = await this.stt.transcribe(this.pendingSamples);
       this.emit("userMessage", transcription);
       this.pendingSamples = [];
@@ -201,4 +203,4 @@ class Call extends EventEmitter {
     return;
   }
 }
-exports.Call = Call;
+exports.WebCall = WebCall;

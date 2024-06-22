@@ -4,6 +4,7 @@ import "./app.css";
 
 const SERVER_WS_URL = process.env.SERVER_WS_URL || "ws://localhost:8000";
 
+const END_OF_SPEECH_TOKEN = "EOS";
 
 const AudioContextSettings = {
     sampleRate: 24000,
@@ -117,7 +118,7 @@ class Streamer {
       },
       onSpeechEnd: (audio) => {
         logMessage("--- speech end");
-        ws.send("end");
+        ws.send(END_OF_SPEECH_TOKEN);
         this.userIsSpeaking = false;
       },
     })
@@ -151,7 +152,7 @@ class Streamer {
   }
 
   async stop(graceful: boolean = false) {
-    this.audioContext?.close();
+    this.audioContext?.suspend();
     this.stream?.getTracks().forEach((track) => {
       track.stop();
     });
@@ -194,7 +195,7 @@ class Playback {
             }, 1000);
         }
     } else {
-      this.audioContext.close();
+      this.audioContext.suspend();
     }
   }
 
