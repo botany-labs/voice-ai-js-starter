@@ -45,18 +45,15 @@ export default function App() {
           (ws.current.onmessage = (event) => {
             if (event.data instanceof ArrayBuffer) {
               playback.current?.addSamples(new Float32Array(event.data));
+            } else if (event.data === CLEAR_BUFFER_TOKEN) {
+              playback.current?.clear().then((didInterrupt: boolean) => {
+                if (didInterrupt) {
+                  logMessage("--- interrupt recorded", didInterrupt);
+                  ws.current && ws.current.send(INTERRUPT_TOKEN);
+                }
+              });
             } else {
               logMessage(event.data);
-              if (event.data === CLEAR_BUFFER_TOKEN) {
-                logMessage("clear buffer2");
-
-                playback.current?.clear().then((didInterrupt: boolean) => {
-                  if (didInterrupt) {
-                    logMessage("sent did interrupt", didInterrupt);
-                    ws.current && ws.current.send(INTERRUPT_TOKEN);
-                  }
-                });
-              }
             }
           });
 
