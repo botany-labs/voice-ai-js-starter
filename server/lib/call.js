@@ -29,7 +29,7 @@ class CallConversation {
       this.onEnd && this.onEnd(this.callLog);
     });
     this.call.on(INTERRUPT_TOKEN, () => {
-      this.addToCallLog("INTERRUPTED");
+      this.noteWhatWasSaid("user", "[Interrupted your last message]")
     });
     this.addToCallLog("INIT", {
       assistant: JSON.stringify(this.assistant),
@@ -70,7 +70,7 @@ class CallConversation {
     this.call.on("userMessage", async (message) => {
       this.call.pushMeta(CLEAR_BUFFER_TOKEN);
       this.noteWhatWasSaid("user", message);
-      
+
       const utterance = await this.assistant.createUtterance();
       if (utterance) {
         this.noteWhatWasSaid("assistant", utterance);
@@ -196,15 +196,17 @@ class WebCall extends EventEmitter {
   async _handleWebsocket_Meta(message) {
     let messageString = message.toString();
     if (messageString === END_OF_SPEECH_TOKEN) {
-      if (!this.pendingSamples.length) {
+      if (this.pendingSamples.length) {
         const transcription = await this.stt.transcribe(this.pendingSamples);
         this.emit("userMessage", transcription);
-      this.pendingSamples = [];
+        this.pendingSamples = [];
       }
-      console.warn("GOT EOS but no audio");
+      else {
+        console.warn("GOT EOS but no audio");
+      }
       return;
     }
-    this.emit(message);
+    this.emit(messageString);
     console.error("Unknown message type:", message);
   }
 
