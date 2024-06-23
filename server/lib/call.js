@@ -2,9 +2,9 @@ const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
 const { generateBeep } = require("./audio");
 
-const END_OF_SPEECH_TOKEN = "EOS";
-const INTERRUPT_TOKEN = "INT";
-const CLEAR_BUFFER_TOKEN = "CLR";
+const END_OF_SPEECH_TOKEN = "EOS"; // End of speech on client side
+const INTERRUPT_TOKEN = "INT"; // Interrupt reported from client side
+const CLEAR_BUFFER_TOKEN = "CLR"; // Clear playback buffer request from server
 
 /**
  * CallConversation represents a conversation between a user and an assistant.

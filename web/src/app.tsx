@@ -4,9 +4,9 @@ import * as vad from "@ricky0123/vad-web";
 const SERVER_WS_URL =
   process.env.REACT_APP_SERVER_WS_URL ?? "ws://localhost:8000";
 
-const END_OF_SPEECH_TOKEN = "EOS";
-const INTERRUPT_TOKEN = "INT";
-const CLEAR_BUFFER_TOKEN = "CLR";
+const END_OF_SPEECH_TOKEN = "EOS"; // End of speech on client side
+const INTERRUPT_TOKEN = "INT"; // Interrupt reported from client side
+const CLEAR_BUFFER_TOKEN = "CLR"; // Clear playback buffer request from server
 
 // These are shared between streamer and playback but
 // we are using float32arrays of pcm 24k 16bit mono
