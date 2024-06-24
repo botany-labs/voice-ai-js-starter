@@ -133,7 +133,7 @@ const DEFAULT_UTTERANCE_PROBABILITY = 0.8;
 // ----- Prompting ------
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are a delightful AI voice agent. You are receiving a call from a customer. Please be polite but concise. Respond ONLY with the text to be spoken. DO NOT add any prefix. ";
+  "You are a delightful AI voice agent. You are receiving a call from a customer. Please be polite but concise. Respond ONLY with the text to be spoken. DO NOT add any prefix. The dialogue is transcribed and might be a bit wrong if the speech to text is bad. Don't be afraid to ask to clarify if you don't understand what the customer said because you may have misheard.";
 
 const INSTRUCTION_PROMPT_BASE = `
 INSTRUCTIONS
