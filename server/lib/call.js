@@ -1,6 +1,14 @@
 const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
-const { generateBeep } = require("./audio");
+const { generateBeep, pcm16ToFloat32 } = require("./audio");
+const { Writable, Readable, pipeline } = require("stream");
+const OpenAI = require("openai");
+
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 
 const END_OF_SPEECH_TOKEN = "EOS"; // End of speech on client side
 const INTERRUPT_TOKEN = "INT"; // Interrupt reported from client side
@@ -56,8 +64,30 @@ class CallConversation {
           firstMessage = content;
         }
         this.noteWhatWasSaid("assistant", firstMessage);
-        const audio = await this.assistant.textToSpeech(firstMessage);
-        this.call.pushAudio(audio);
+        // const audio = await this.assistant.textToSpeech(firstMessage);
+        // const readableStream = Readable.from(Buffer.from(audio.buffer));
+        const response = await openai.audio.speech.create({
+          model: 'tts-1',
+          voice: 'nova',
+          input: firstMessage,
+          response_format: "pcm",
+        });
+
+        const readableStream = response.body;
+        const writeableStream = new PushAudioStream(this.call.ws);
+        // readableStream.pipe(writeableStream);
+        pipeline(
+          readableStream, 
+          new ChunkTransform(), 
+          new PcmToFloat32Transform(), 
+          writeableStream, (err) => {
+          if (err) {
+            console.error(err);
+          }
+          else {
+            console.log("Pipeline ended");
+          }
+        })
       }
     }, delay);
   }
@@ -84,10 +114,29 @@ class CallConversation {
 
       if (content) {
         this.noteWhatWasSaid("assistant", content);
-        const audio = await this.call._profileIt("speechGeneration", async () => {
-          return await this.assistant.textToSpeech(content);
+        // const audio = await this.call._profileIt("speechGeneration", async () => {
+        //   return await this.assistant.textToSpeech(content);
+        // });
+
+        // const readableStream = Readable.from(Buffer.from(audio.buffer));
+        const response = await openai.audio.speech.create({
+          model: 'tts-1',
+          voice: 'nova',
+          input: content,
+          response_format: "pcm",
         });
-        this.call.pushAudio(audio);
+
+        const readableStream = response.body;
+        const writeableStream = new PushAudioStream(this.call.ws);
+        // readableStream.pipe(writeableStream);
+        pipeline(readableStream, new ChunkTransform(), new PcmToFloat32Transform(), writeableStream, (err) => {
+          if (err) {
+            console.error(err);
+          }
+          else {
+            console.log("Pipeline ended");
+          }
+        })
       }
 
       if (selectedTool) {
@@ -230,3 +279,76 @@ class WebCall extends EventEmitter {
   }
 }
 exports.WebCall = WebCall;
+
+
+class PushAudioStream extends Writable {
+  constructor(ws) {
+    super();
+    this.ws = ws;
+  }
+
+  _write(chunk, encoding, callback) {
+    console.log(chunk);
+    try {
+      const audio = new Float32Array(chunk.buffer);
+      for (let i = 0; i < audio.length; i += 1024) {
+        this.ws.send(audio.slice(i, i + 1024));
+      }
+      callback();
+    } catch (error) {
+      console.error(error);
+      return callback(error);
+    }
+  }
+}
+
+const { Transform } = require("stream");
+
+class PcmToFloat32Transform extends Transform {
+  constructor(options) {
+    super(options);
+  }
+
+  _transform(chunk, encoding, callback) {
+    console.log("GOT", chunk.buffer.bytelength, chunk);
+
+    const asInt16 = new Int16Array(chunk.buffer);
+    const audio = pcm16ToFloat32(asInt16);
+    this.push(Buffer.from(audio.buffer));
+    callback();
+  }
+}
+
+class ChunkTransform extends Transform {
+  constructor(options) {
+    super(options);
+    this.buffer = Buffer.alloc(0);
+    this.minSizeBytes = 24000 * 2; // 24k hz, int16 is 2 bytes - means buffer at least 1 second
+  }
+
+  _transform(chunk, encoding, callback) {
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    if (this.buffer.length < this.minSizeBytes) {
+      callback();
+      return;
+    }
+    const excess = this.buffer.length % 4;
+    const chunkToPush = this.buffer.subarray(0, this.buffer.length - excess);
+    console.log("PUSHING", chunkToPush.length);
+    this.push(chunkToPush);
+    this.buffer = this.buffer.subarray(this.buffer.length - excess);
+    callback();
+  }
+
+  _flush(callback) {
+    if (this.buffer.length > 0) {
+      let chunkToPush = this.buffer;
+      if (chunkToPush.length % 4 !== 0) {
+        const padding = Buffer.alloc(4 - (chunkToPush.length % 4));
+        chunkToPush = Buffer.concat([chunkToPush, padding]);
+      }
+      this.push(chunkToPush);
+    }
+    callback();
+  }
+}
