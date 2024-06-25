@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import * as vad from "@ricky0123/vad-web";
+import EventEmitter from "events";
 
 const SERVER_WS_URL =
   process.env.REACT_APP_SERVER_WS_URL ?? "ws://localhost:8000";
@@ -26,6 +27,7 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const streamer = useRef<Streamer | null>(null);
   const playback = useRef<Playback | null>(null);
+  const lastEOS = useRef<Date | null>(null);
 
   const stopRecording = (graceful: boolean = false) => {
     setIsRecording(false);
@@ -33,6 +35,7 @@ export default function App() {
     playback.current?.stop(graceful);
     ws.current?.close();
     ws.current = null;
+    lastEOS.current = null;
   };
 
   const startRecording = async () => {
@@ -59,8 +62,18 @@ export default function App() {
 
         logMessage("start recording", new Date());
         playback.current = new Playback(new AudioContext(AudioContextSettings));
+        playback.current.on("playbackStart", () => {
+          if (!lastEOS.current) {
+            return;
+          }
+          const responseTime = new Date().getTime() - lastEOS.current.getTime();
+          logMessage("--- Response time ", responseTime, " ms");
+        });
         playback.current.start();
         streamer.current = new Streamer(ws.current!, logMessage);
+        streamer.current.on("speechEnd", () => {
+          lastEOS.current = new Date();
+        });
         streamer.current.start();
 
         ws.current &&
@@ -163,7 +176,7 @@ const useLogs = () => {
   return [logMessage, logDisplay] as const;
 };
 
-class Streamer {
+class Streamer extends EventEmitter {
   ws: WebSocket;
   stream: MediaStream | null = null;
   processor: ScriptProcessorNode | null = null;
@@ -172,14 +185,17 @@ class Streamer {
   userIsSpeaking: boolean = false;
 
   constructor(ws: WebSocket, private logMessage: (...args: any[]) => void) {
+    super();
     this.ws = ws;
 
     this.vadMic = vad.MicVAD.new({
       onSpeechStart: () => {
+        this.emit("speechStart");
         logMessage("--- vad: speech start");
         this.userIsSpeaking = true;
       },
       onSpeechEnd: (audio) => {
+        this.emit("speechEnd");
         logMessage("--- vad: speech end");
         ws.send(END_OF_SPEECH_TOKEN);
         this.userIsSpeaking = false;
@@ -226,17 +242,24 @@ class Streamer {
   }
 }
 
-class Playback {
+class Playback extends EventEmitter {
   samples: Float32Array[] = [];
+  lastFramePlayed: "silence" | "non-silence" = "silence";
 
   constructor(public audioContext: AudioContext) {
+    super();
     this.audioContext.suspend();
     const scriptNode = this.audioContext.createScriptProcessor(1024, 1, 1);
     scriptNode.onaudioprocess = (event) => {
       if (this.samples.length > 0) {
+        if (this.lastFramePlayed === "silence") {
+          this.emit("playbackStart");
+        }
+        this.lastFramePlayed = "non-silence";
         event.outputBuffer.getChannelData(0).set(this.samples[0]);
         this.samples.shift();
       } else {
+        this.lastFramePlayed = "silence";
         const silence = new Float32Array(1024);
         event.outputBuffer.getChannelData(0).set(silence);
       }
@@ -253,6 +276,8 @@ class Playback {
     const dirty = this.samples.length > 0;
     this.samples = [];
     await this.audioContext.resume();
+    this.emit("clear", { dirty });
+    this.lastFramePlayed = "silence";
     return dirty;
   }
 
