@@ -79,6 +79,7 @@ class CallConversation {
         // readableStream.pipe(writeableStream);
         try {
           await pipeline(
+            
             readableStream, 
             new ChunkTransform(), 
             new PcmToFloat32Transform(), 
@@ -108,54 +109,63 @@ class CallConversation {
         this.call.pushAudio(audio);
       }
 
-      const { content, selectedTool } = await this.call._profileIt("responseGeneration", async () => {
-        return await this.assistant.createResponse(this.history);
-      });
+      // const { content, selectedTool } = await this.call._profileIt("responseGeneration", async () => {
+      //   return await this.assistant.createResponse(this.history);
+      // });
 
-      if (content) {
-        this.noteWhatWasSaid("assistant", content);
+      // if (content) {
         // const audio = await this.call._profileIt("speechGeneration", async () => {
         //   return await this.assistant.textToSpeech(content);
         // });
 
         // const readableStream = Readable.from(Buffer.from(audio.buffer));
-        const response = await openai.audio.speech.create({
-          model: 'tts-1',
-          voice: 'nova',
-          input: content,
-          response_format: "pcm",
+
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: this.history,
+          stream: true,
         });
 
-        const readableStream = response.body;
-        const writeableStream = new PushAudioStream(this.call.ws);
-        // readableStream.pipe(writeableStream);
+
+        async function* oaistream() {
+          for await (const part of response) {
+            console.log("PART", part.choices[0].delta.content);
+            yield part.choices[0].delta.content ?? '';
+          }
+        }
+
         try {
           await pipeline(
-            readableStream, 
+          // new OpenAIChatStream(response, (text) => {
+          //   this.noteWhatWasSaid("assistant", text);
+          // }),
+          Readable.from(oaistream()),
+          new TTSStream(),
           new ChunkTransform(), 
           new PcmToFloat32Transform(), 
-            writeableStream)
+          new PushAudioStream(this.call.ws)
+        )
         } catch (error) {
           console.error("Pipeline error:", error);
         }
-      }
 
-      if (selectedTool) {
-        this.addToCallLog("TOOL_SELECTED", {
-          tool: selectedTool
-        });
-      }
+      // if (selectedTool) {
+      //   this.addToCallLog("TOOL_SELECTED", {
+      //     tool: selectedTool
+      //   });
+      // }
 
-      if (selectedTool === "endCall") {
-        this.call.pushMeta("---- Assistant Hung Up ----");
-        this.call.end();
-        this.call.off("userMessage", this.startListening);
-        return;
-      }
-      else if (selectedTool) {
-        // TODO: implement custom tools
-        console.warn("[CUSTOM TOOLS NOT YET SUPPORTED] Unhandled tool:", selectedTool);
-      }
+      // if (selectedTool === "endCall") {
+      //   this.call.pushMeta("---- Assistant Hung Up ----");
+      //   this.call.end();
+      //   this.call.off("userMessage", this.startListening);
+      //   return;
+      // }
+      // else if (selectedTool) {
+      //   // TODO: implement custom tools
+      //   console.warn("[CUSTOM TOOLS NOT YET SUPPORTED] Unhandled tool:", selectedTool);
+      // }
     });
   }
 
@@ -346,6 +356,94 @@ class ChunkTransform extends Transform {
       this.push(chunkToPush);
     }
     callback();
+  }
+}
+
+
+class TTSStream extends Transform {
+  constructor() {
+    super();
+    this.text = "";
+  }
+
+  async _transform(chunk, encoding, callback) {
+    console.log("GOT", chunk.toString());
+    this.text += chunk.toString();
+    if (this.indexOfPunctuation(this.text) == -1 && this.text.length < 200) {
+      callback();
+      return;
+    }
+
+    let toSpeak = null;
+    if (this.indexOfPunctuation(this.text) !== -1) {
+      toSpeak = this.text.slice(0, this.indexOfPunctuation(this.text));
+      toSpeak = this.text.slice(0, this.indexOfPunctuation(this.text));
+      this.text = this.text.slice(this.indexOfPunctuation(this.text));
+    } else {
+      toSpeak = this.text;
+      this.text = "";
+    }
+
+    console.log("TO SPEAK", toSpeak);
+
+    if (!toSpeak.length) {
+      callback();
+      return;
+    }
+
+    const response = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: 'nova',
+      input: toSpeak,
+      response_format: "pcm",
+    });
+
+    const readableStream = response.body;
+    readableStream.on('data', (data) => {
+      this.push(data);
+    });
+
+    readableStream.on('end', () => {
+      console.log("PUSHED", toSpeak);
+      callback();
+    });
+
+    readableStream.on('error', (error) => {
+      console.error("Error in TTSStream:", error);
+      callback(error);
+    });
+  }
+
+  indexOfPunctuation(text) {
+    return text.search(/[.!?]/);
+  }
+
+  _flush(callback) {
+    callback();
+  }
+}
+
+class OpenAIChatStream extends Readable {
+  constructor(response, onEnd) {
+    super();
+    this.response = response;
+    this.text = "";
+    this.onEnd = onEnd;
+  }
+
+  async _read(size) {
+    for await (const part of this.response) {
+      console.log("PART", part, part.choices[0].delta, part.choices[0].delta.content);
+      this.text += part.choices[0].delta.content;
+      this.push(this.text);
+      return;
+    }
+    this.push(null);
+  }
+
+  _end() {
+    this.onEnd(text);
+    this.push(null);
   }
 }
 
