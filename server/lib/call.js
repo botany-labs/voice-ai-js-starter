@@ -77,14 +77,16 @@ class CallConversation {
         const audio = await this.assistant.textToSpeech(utterance);
         this.call.pushAudio(audio);
       }
-
-      const { content, selectedTool } = await this.assistant.createResponse(
-        this.history
-      );
+      
+      const { content, selectedTool } = await this._profileIt("responseGeneration", async () => {
+        return await this.assistant.createResponse(this.history);
+      });
 
       if (content) {
         this.noteWhatWasSaid("assistant", content);
-        const audio = await this.assistant.textToSpeech(content);
+        const audio = await this._profileIt("speechGeneration", async () => {
+          return await this.assistant.textToSpeech(content);
+        });
         this.call.pushAudio(audio);
       }
 
@@ -197,7 +199,9 @@ class WebCall extends EventEmitter {
     let messageString = message.toString();
     if (messageString === END_OF_SPEECH_TOKEN) {
       if (this.pendingSamples.length) {
-        const transcription = await this.stt.transcribe(this.pendingSamples);
+        const transcription = await this._profileIt("transcription", async () => {
+          return await this.stt.transcribe(this.pendingSamples);
+        });
         this.emit("userMessage", transcription);
         this.pendingSamples = [];
       }
@@ -214,6 +218,15 @@ class WebCall extends EventEmitter {
     const audio = new Float32Array(message);
     this.pendingSamples.push(audio);
     return;
+  }
+
+  async _profileIt(name, fn) {
+    const startTime = new Date();
+    const result = await fn();
+    const endTime = new Date();
+    const duration = endTime - startTime;
+    this.pushMeta(`--- time.${name} ${duration} ms`);
+    return result;
   }
 }
 exports.WebCall = WebCall;

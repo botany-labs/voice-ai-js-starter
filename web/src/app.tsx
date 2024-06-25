@@ -67,7 +67,7 @@ export default function App() {
             return;
           }
           const responseTime = new Date().getTime() - lastEOS.current.getTime();
-          logMessage("--- Response time ", responseTime, " ms");
+          logMessage("--- time.TOTAL_RESPONSE ", responseTime, " ms");
         });
         playback.current.start();
         streamer.current = new Streamer(ws.current!, logMessage);
