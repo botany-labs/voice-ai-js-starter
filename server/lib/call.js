@@ -1,7 +1,8 @@
 const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
 const { generateBeep, pcm16ToFloat32 } = require("./audio");
-const { Writable, Readable, pipeline } = require("stream");
+const { Writable, Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 const OpenAI = require("openai");
 
 
@@ -76,18 +77,17 @@ class CallConversation {
         const readableStream = response.body;
         const writeableStream = new PushAudioStream(this.call.ws);
         // readableStream.pipe(writeableStream);
-        pipeline(
-          readableStream, 
-          new ChunkTransform(), 
-          new PcmToFloat32Transform(), 
-          writeableStream, (err) => {
-          if (err) {
-            console.error(err);
-          }
-          else {
-            console.log("Pipeline ended");
-          }
-        })
+        try {
+          await pipeline(
+            readableStream, 
+            new ChunkTransform(), 
+            new PcmToFloat32Transform(), 
+            writeableStream
+          )
+        } catch (error) {
+          console.error("Pipeline error:", error);
+        }
+
       }
     }, delay);
   }
@@ -129,14 +129,15 @@ class CallConversation {
         const readableStream = response.body;
         const writeableStream = new PushAudioStream(this.call.ws);
         // readableStream.pipe(writeableStream);
-        pipeline(readableStream, new ChunkTransform(), new PcmToFloat32Transform(), writeableStream, (err) => {
-          if (err) {
-            console.error(err);
-          }
-          else {
-            console.log("Pipeline ended");
-          }
-        })
+        try {
+          await pipeline(
+            readableStream, 
+          new ChunkTransform(), 
+          new PcmToFloat32Transform(), 
+            writeableStream)
+        } catch (error) {
+          console.error("Pipeline error:", error);
+        }
       }
 
       if (selectedTool) {
@@ -288,7 +289,6 @@ class PushAudioStream extends Writable {
   }
 
   _write(chunk, encoding, callback) {
-    console.log(chunk);
     try {
       const audio = new Float32Array(chunk.buffer);
       for (let i = 0; i < audio.length; i += 1024) {
@@ -310,8 +310,6 @@ class PcmToFloat32Transform extends Transform {
   }
 
   _transform(chunk, encoding, callback) {
-    console.log("GOT", chunk.buffer.bytelength, chunk);
-
     const asInt16 = new Int16Array(chunk.buffer);
     const audio = pcm16ToFloat32(asInt16);
     this.push(Buffer.from(audio.buffer));
@@ -323,28 +321,26 @@ class ChunkTransform extends Transform {
   constructor(options) {
     super(options);
     this.buffer = Buffer.alloc(0);
-    this.minSizeBytes = 24000 * 2; // 24k hz, int16 is 2 bytes - means buffer at least 1 second
+    this.minSizeBytes = 24000 * 2 * 2; // 24k hz, int16 is 2 bytes - means buffer at least 1 second
   }
 
   _transform(chunk, encoding, callback) {
     this.buffer = Buffer.concat([this.buffer, chunk]);
-    if (this.buffer.length < this.minSizeBytes) {
-      callback();
-      return;
+    while (this.buffer.length >= this.minSizeBytes) {
+      let chunkToPush = this.buffer.slice(0, this.minSizeBytes);
+      const pcm = new Uint8Array(chunkToPush.length);
+      pcm.set(chunkToPush);
+      this.push(pcm);
+      this.buffer = this.buffer.slice(this.minSizeBytes);
     }
-    const excess = this.buffer.length % 4;
-    const chunkToPush = this.buffer.subarray(0, this.buffer.length - excess);
-    console.log("PUSHING", chunkToPush.length);
-    this.push(chunkToPush);
-    this.buffer = this.buffer.subarray(this.buffer.length - excess);
     callback();
   }
 
   _flush(callback) {
     if (this.buffer.length > 0) {
       let chunkToPush = this.buffer;
-      if (chunkToPush.length % 4 !== 0) {
-        const padding = Buffer.alloc(4 - (chunkToPush.length % 4));
+      if (chunkToPush.length % 2 !== 0) {
+        const padding = Buffer.alloc(2 - (chunkToPush.length % 2));
         chunkToPush = Buffer.concat([chunkToPush, padding]);
       }
       this.push(chunkToPush);
@@ -352,3 +348,4 @@ class ChunkTransform extends Transform {
     callback();
   }
 }
+
