@@ -77,14 +77,14 @@ class CallConversation {
         const audio = await this.assistant.textToSpeech(utterance);
         this.call.pushAudio(audio);
       }
-      
-      const { content, selectedTool } = await this._profileIt("responseGeneration", async () => {
+
+      const { content, selectedTool } = await this.call._profileIt("responseGeneration", async () => {
         return await this.assistant.createResponse(this.history);
       });
 
       if (content) {
         this.noteWhatWasSaid("assistant", content);
-        const audio = await this._profileIt("speechGeneration", async () => {
+        const audio = await this.call._profileIt("speechGeneration", async () => {
           return await this.assistant.textToSpeech(content);
         });
         this.call.pushAudio(audio);
