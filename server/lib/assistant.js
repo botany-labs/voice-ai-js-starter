@@ -120,8 +120,12 @@ class Assistant {
   }
 
   // Create a conversation with this assistant
-  createConversation(ws) {
-    return new CallConversation(this, ws);
+  /**
+   * @param {WebSocket} ws - WebSocket to create a conversation with.
+   * @param {object} [options] - Options to give your assistant.
+   */
+  createConversation(ws, options={}) {
+    return new CallConversation(this, ws, options);
   }
 }
 

@@ -33,11 +33,13 @@ server.on("connection", (ws, req) => {
 
     // To have an AI agent talk to the user we just need to create a conversation and begin it.
     // The conversation will handle the audio streaming and the AI agent will handle the text streaming.
-    const conversation = LnlCustomerSupport.createConversation(ws);
-    conversation.onEnd = (callLogs) => {
-        console.log("----- CALL LOG -----");
-        console.log(callLogs);
-    };
+    const conversation = LnlCustomerSupport.createConversation(ws, {
+        onEnd: (callLogs) => {
+            console.log("----- CALL LOG -----");
+            console.log(callLogs);
+        },
+        speechToTextModel: "deepgram/nova-2",
+    });
     conversation.begin(1000);
 
     ws.on("close", () => {

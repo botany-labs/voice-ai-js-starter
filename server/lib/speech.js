@@ -1,7 +1,7 @@
 const fetch = require("node-fetch");
 const OpenAI = require("openai");
 const util = require("util");
-const { float32ToPCM16, pcm16ToFloat32, createWavHeader } = require("./audio");
+const { float32ToPCM16, pcm16ToFloat32, float32_pcm16_to_wav_blob } = require("./audio");
 const PlayHT = require("playht");
 const { createClient : Deepgram }  = require("@deepgram/sdk");
 
@@ -20,7 +20,7 @@ const TTS_MODELS = [
   "deepgram/aura-asteria-en",
 ];
 
-const STT_MODELS = ["openai/whisper-1"];
+const STT_MODELS = ["openai/whisper-1", "deepgram/nova-2"];
 
 class TextToSpeech {
   constructor(modelID, voice) {
@@ -230,58 +230,73 @@ const tts_deepgram = async (message, model, voice) => {
 
 class SpeechToText {
   constructor(model) {
-    this.model = model;
-    if (!STT_MODELS.includes(model)) {
-      throw new Error(`Unsupported STT model: ${model}`);
+    this.model = model ?? 'openai/whisper-1';
+    console.log("MODEL IS ", this.model);
+    this.stt = (() => {
+      switch (this.model) {
+        case "deepgram/nova-2":
+          if (!process.env.DEEPGRAM_API_KEY) {
+            throw new Error(
+              "DEEPGRAM_API_KEY is required to use deepgram for SpeechToText"
+            );
+          }
+          return transcribeDeepgram;
+        case "openai/whisper-1":
+        default:
+            if (!process.env.OPENAI_API_KEY) {
+              throw new Error(
+                "OPENAI_API_KEY is required to use openai for SpeechToText"
+              );
+            }
+            return transcribeWhisper;
+      }
+    })();
+    if (!STT_MODELS.includes(this.model)) {
+      throw new Error(`Unsupported STT model: ${this.model}`);
     }
   }
 
   /**
-   * Transcribe audio. (only whisper-1 is supported for now)
-   * @param {Float32Array[]} samples - The audio samples as an array of Float32Arrays.
-   * Samples should be in 24k sample rate, 16 bit depth, 1 channel format. Stored as Float32Arrays of length 1024.
+   * Transcribe audio. 
+   * @param {Float32Array} float32_pcm16 - The audio sample
+   * Samples should be in 24k sample rate, 16 bit depth, 1 channel format.
    * @returns {Promise<string>} - The transcribed text
    */
-  async transcribe(inputs) {
-    return transcribeWhisper(inputs);
+  async transcribe(float32_pcm16) {
+    return this.stt(float32_pcm16);
   }
 }
 
-async function transcribeWhisper(audioSamples) {
-  const samples = audioSamples.slice();
-  // join pending samples
-  const audio = new Float32Array(samples.length * 1024);
-  for (let i = 0; i < samples.length; i++) {
-    audio.set(samples[i], i * 1024);
-  }
+async function transcribeDeepgram(float32_pcm16) {
+  const deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
+  const wavBlob = float32_pcm16_to_wav_blob(float32_pcm16);
 
-  let pcm16 = float32ToPCM16(audio);
-  // TODO: Pass these in from client
-  const sampleRate = 24000;
-  const bitDepth = 16;
-  const numChannels = 1;
-
-  // Create WAV header
-  const wavHeader = createWavHeader(
-    sampleRate,
-    numChannels,
-    bitDepth / 8,
-    pcm16.length * 2
+  const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+    wavBlob,
+    {
+      model: "nova-2",
+      smart_format: false,
+    }
   );
 
-  // Concatenate header and PCM data
-  const wavBuffer = Buffer.concat([wavHeader, Buffer.from(pcm16.buffer)]);
+  if (error) {
+    console.error(error);
+    return;
+  }
 
-  // Create a Blob from the WAV buffer
-  const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
-  wavBlob.name = "audio.wav";
-  wavBlob.lastModified = Date.now();
+  console.log("GOT", result, "CHANNELS", result.results.channels);
+  const transcript = result.results.channels[0].alternatives.reduce((acc, alt) => {
+    return acc + alt.transcript;
+  }, "");
+  return transcript;
+}
 
+async function transcribeWhisper(float32_pcm16) {
+  const wavBlob = float32_pcm16_to_wav_blob(float32_pcm16);
   const transcription = await openai.audio.transcriptions.create({
     model: "whisper-1",
     file: wavBlob,
   });
-
   return transcription.text;
 }
 
@@ -291,5 +306,6 @@ module.exports = {
   tts_elevenlabs,
   tts_openai,
   transcribeWhisper,
+  transcribeDeepgram,
   TTS_MODELS,
 };

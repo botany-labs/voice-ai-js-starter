@@ -17,13 +17,17 @@ class CallConversation {
    * @param {Assistant} assistant - Assistant to use for the conversation.
    * @param {WebSocket} ws - Websocket to use for the conversation.
    * @param {(callLogs: Array<{timestamp: string, event: string, meta: object}>) => void} onEnd - Function to call when the conversation ends.
+   * @param {object} options - Options for the conversation.
+   * @param {object} onEnd - Function to call when the conversation ends.
+   * @param {string} options.speechToTextModel - Speech to text model to use. Defaults to "openai/whisper-1".
    */
-  constructor(assistant, ws, onEnd=()=>{}) {
+  constructor(assistant, ws, options={}) {
     this.assistant = assistant;
     this.call = new WebCall(ws);
+    this.call.stt = new SpeechToText(options.speechToTextModel);
+    this.onEnd = options.onEnd || (() => {});
     this.history = assistant.prompt;
     this.callLog = [];
-    this.onEnd = onEnd;
     this.call.on("callEnded", () => {
       this.addToCallLog("CALL_ENDED");
       this.onEnd && this.onEnd(this.callLog);
@@ -149,11 +153,12 @@ class WebCall extends EventEmitter {
   /**
    * Constructor
    * @param {WebSocket} ws - Websocket to use for the call.
+   * @param {SpeechToText} stt - Speech to text instance to use for the call.
    */
-  constructor(ws) {
+  constructor(ws, stt) {
     super();
     this.ws = ws;
-    this.stt = new SpeechToText('openai/whisper-1');
+    this.stt = stt;
     this.pendingSamples = [];
     this.ws.on("message", this._onWebsocketMessage.bind(this));
     this.ws.on("close", () => {
@@ -200,7 +205,13 @@ class WebCall extends EventEmitter {
     if (messageString === END_OF_SPEECH_TOKEN) {
       if (this.pendingSamples.length) {
         const transcription = await this._profileIt("transcription", async () => {
-          return await this.stt.transcribe(this.pendingSamples);
+
+          const data = this.pendingSamples.slice();
+          const combinedAudio = new Float32Array(data.length * 1024);
+          for (let i = 0; i < data.length; i++) {
+            combinedAudio.set(data[i], i * 1024);
+          }
+          return await this.stt.transcribe(combinedAudio);
         });
         this.emit("userMessage", transcription);
         this.pendingSamples = [];

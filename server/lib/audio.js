@@ -68,7 +68,32 @@ function generateBeep(frequency, durationSeconds, sampleRate) {
     return buffer;
 }
 
+function float32_pcm16ToWavBlob(float32_pcm16) {
+  let pcm16 = float32ToPCM16(float32_pcm16);
+  const sampleRate = 24000;
+  const bitDepth = 16;
+  const numChannels = 1;
+
+  // Create WAV header
+  const wavHeader = createWavHeader(
+    sampleRate,
+    numChannels,
+    bitDepth / 8,
+    pcm16.length * 2
+  );
+
+  // Concatenate header and PCM data
+  const wavBuffer = Buffer.concat([wavHeader, Buffer.from(pcm16.buffer)]);
+
+  // Create a Blob from the WAV buffer
+  const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
+  wavBlob.name = "audio.wav";
+  wavBlob.lastModified = Date.now();
+  return wavBlob;
+}
+
 module.exports = {
+  float32_pcm16_to_wav_blob: float32_pcm16ToWavBlob,
   float32ToPCM16,
   pcm16ToFloat32,
   createWavHeader,
