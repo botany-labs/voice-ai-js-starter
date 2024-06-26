@@ -40,7 +40,7 @@ server.on("connection", (ws, req) => {
         },
         speechToTextModel: "deepgram:live/nova-2",
     });
-    conversation.begin(1000);
+    conversation.begin(2000);
 
     ws.on("close", () => {
         console.log("Client disconnected", cid);

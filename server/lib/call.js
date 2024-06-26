@@ -2,6 +2,7 @@ const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
 const { generateBeep } = require("./audio");
 
+const START_LISTENING_TOKEN = "RDY"; // Sent by server to indicate start VAD
 const END_OF_SPEECH_TOKEN = "EOS"; // End of speech on client side
 const INTERRUPT_TOKEN = "INT"; // Interrupt reported from client side
 const CLEAR_BUFFER_TOKEN = "CLR"; // Clear playback buffer request from server
@@ -51,7 +52,8 @@ class CallConversation {
     setTimeout(async () => {
       this.startListening();
       this.addToCallLog("READY");
-      this.call.pushMeta("---- Assistant Ready ----");
+      this.call.pushMeta("--- Assistant Ready ---");
+      this.call.pushMeta(START_LISTENING_TOKEN);
 
       if (this.assistant.speakFirst) {
         let firstMessage = this.assistant.speakFirstOpeningMessage;
@@ -205,7 +207,6 @@ class WebCall extends EventEmitter {
     if (messageString === END_OF_SPEECH_TOKEN) {
       if (this.pendingSamples.length) {
         const transcription = await this._profileIt("transcription", async () => {
-
           const data = this.pendingSamples.slice();
           const combinedAudio = new Float32Array(data.length * 1024);
           for (let i = 0; i < data.length; i++) {

@@ -5,6 +5,7 @@ import EventEmitter from "events";
 const SERVER_WS_URL =
   process.env.REACT_APP_SERVER_WS_URL ?? "ws://localhost:8000";
 
+const START_LISTENING_TOKEN = "RDY"; // Sent by server to indicate start VAD
 const END_OF_SPEECH_TOKEN = "EOS"; // End of speech on client side
 const INTERRUPT_TOKEN = "INT"; // Interrupt reported from client side
 const CLEAR_BUFFER_TOKEN = "CLR"; // Clear playback buffer request from server
@@ -55,7 +56,13 @@ export default function App() {
                   ws.current && ws.current.send(INTERRUPT_TOKEN);
                 }
               });
-            } else {
+            } else if (event.data === START_LISTENING_TOKEN) {
+              playback.current?.once('playbackEnd', () => {
+                logMessage('--- starting vad');
+                streamer.current?.startVoiceDetection();
+              })
+            }
+             else {
               logMessage(event.data);
             }
           });
@@ -204,7 +211,11 @@ class Streamer extends EventEmitter {
     this.audioContext = new AudioContext(AudioContextSettings);
   }
 
-  async start() {
+  async startVoiceDetection() {
+    (await this.vadMic!).start();
+  }
+
+  async start(startVoiceDetection: boolean = false) {
     const constraints = {
       audio: true,
     };
@@ -225,7 +236,9 @@ class Streamer extends EventEmitter {
       source.connect(this.processor);
       this.processor.connect(audioContext.destination);
     });
-    (await this.vadMic!).start();
+    if (startVoiceDetection) {
+        await this.startVoiceDetection();
+    }
   }
 
   async stop(graceful: boolean = false) {
@@ -259,6 +272,9 @@ class Playback extends EventEmitter {
         event.outputBuffer.getChannelData(0).set(this.samples[0]);
         this.samples.shift();
       } else {
+        if (this.lastFramePlayed === 'non-silence') {
+          this.emit('playbackEnd');
+        }
         this.lastFramePlayed = "silence";
         const silence = new Float32Array(1024);
         event.outputBuffer.getChannelData(0).set(silence);
