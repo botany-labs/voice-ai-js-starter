@@ -1,7 +1,7 @@
 const { SpeechToText } = require("./speech");
 const { EventEmitter } = require("events");
 const { generateBeep, pcm16ToFloat32 } = require("./audio");
-const { Writable, Readable } = require("node:stream");
+const { Writable, Readable, PassThrough} = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const OpenAI = require("openai");
 
@@ -69,7 +69,7 @@ class CallConversation {
         // const readableStream = Readable.from(Buffer.from(audio.buffer));
         const response = await openai.audio.speech.create({
           model: 'tts-1',
-          voice: 'nova',
+          voice: 'shimmer',
           input: firstMessage,
           response_format: "pcm",
         });
@@ -79,9 +79,8 @@ class CallConversation {
         // readableStream.pipe(writeableStream);
         try {
           await pipeline(
-            
             readableStream, 
-            new ChunkTransform(), 
+            new AudioStreamBuffer(), 
             new PcmToFloat32Transform(), 
             writeableStream
           )
@@ -130,19 +129,19 @@ class CallConversation {
 
         async function* oaistream() {
           for await (const part of response) {
-            console.log("PART", part.choices[0].delta.content);
             yield part.choices[0].delta.content ?? '';
           }
         }
-
+      
         try {
           await pipeline(
-          // new OpenAIChatStream(response, (text) => {
-          //   this.noteWhatWasSaid("assistant", text);
-          // }),
           Readable.from(oaistream()),
+          new CollectorStream((text) => {
+            this.noteWhatWasSaid("assistant", text);
+          }),
+          new SentenceChunker(),
           new TTSStream(),
-          new ChunkTransform(), 
+          new AudioStreamBuffer(), 
           new PcmToFloat32Transform(), 
           new PushAudioStream(this.call.ws)
         )
@@ -327,11 +326,11 @@ class PcmToFloat32Transform extends Transform {
   }
 }
 
-class ChunkTransform extends Transform {
+class AudioStreamBuffer extends Transform {
   constructor(options) {
     super(options);
     this.buffer = Buffer.alloc(0);
-    this.minSizeBytes = 24000 * 2 * 2; // 24k hz, int16 is 2 bytes - means buffer at least 1 second
+    this.minSizeBytes = 24000 * 2 ; // 24k hz, int16 is 2 bytes - means buffer at least 1 second
   }
 
   _transform(chunk, encoding, callback) {
@@ -339,7 +338,7 @@ class ChunkTransform extends Transform {
     while (this.buffer.length >= this.minSizeBytes) {
       let chunkToPush = this.buffer.slice(0, this.minSizeBytes);
       const pcm = new Uint8Array(chunkToPush.length);
-      pcm.set(chunkToPush);
+      pcm.set(chunkToPush, chunkToPush.byteOffset);
       this.push(pcm);
       this.buffer = this.buffer.slice(this.minSizeBytes);
     }
@@ -360,37 +359,55 @@ class ChunkTransform extends Transform {
 }
 
 
-class TTSStream extends Transform {
+class SentenceChunker extends Transform {
   constructor() {
     super();
     this.text = "";
   }
 
-  async _transform(chunk, encoding, callback) {
-    console.log("GOT", chunk.toString());
+  _transform(chunk, encoding, callback) {
     this.text += chunk.toString();
-    if (this.indexOfPunctuation(this.text) == -1 && this.text.length < 200) {
+    if (this.indexOfPunctuation(this.text) == -1 && this.text.split(" ").length < 10) {
       callback();
       return;
     }
-
-    let toSpeak = null;
     if (this.indexOfPunctuation(this.text) !== -1) {
-      toSpeak = this.text.slice(0, this.indexOfPunctuation(this.text));
-      toSpeak = this.text.slice(0, this.indexOfPunctuation(this.text));
+      this.push(this.text.slice(0, this.indexOfPunctuation(this.text)));
       this.text = this.text.slice(this.indexOfPunctuation(this.text));
     } else {
-      toSpeak = this.text;
-      this.text = "";
+      // Push everything but last word (based on spaces)
+      const words = this.text.split(" ");
+      this.push(words.slice(0, words.length - 1).join(" "));
+      this.text = words[words.length - 1];
     }
+    this.push(this.text);
+    this.text = "";
+    callback();
+  }
 
-    console.log("TO SPEAK", toSpeak);
+  _flush(callback) {
+    this.push(this.text);
+    callback();
+  }
 
-    if (!toSpeak.length) {
+  indexOfPunctuation(text) {
+    return text.search(/[.!?]/);
+  }
+}
+
+class TTSStream extends Transform {
+  constructor() {
+    super();
+  }
+
+  async _transform(chunk, encoding, callback) {
+    return this.synthesize(chunk.toString(), callback);
+  }
+  async synthesize(toSpeak, callback) {
+    if (!toSpeak || !toSpeak.length) {
       callback();
       return;
     }
-
     const response = await openai.audio.speech.create({
       model: 'tts-1',
       voice: 'nova',
@@ -402,48 +419,33 @@ class TTSStream extends Transform {
     readableStream.on('data', (data) => {
       this.push(data);
     });
-
     readableStream.on('end', () => {
-      console.log("PUSHED", toSpeak);
       callback();
     });
-
-    readableStream.on('error', (error) => {
-      console.error("Error in TTSStream:", error);
-      callback(error);
-    });
-  }
-
-  indexOfPunctuation(text) {
-    return text.search(/[.!?]/);
   }
 
   _flush(callback) {
-    callback();
+    this.synthesize(this.text, callback);
   }
 }
 
-class OpenAIChatStream extends Readable {
-  constructor(response, onEnd) {
+class CollectorStream extends PassThrough {
+  constructor(onEnd) {
     super();
-    this.response = response;
     this.text = "";
     this.onEnd = onEnd;
   }
 
-  async _read(size) {
-    for await (const part of this.response) {
-      console.log("PART", part, part.choices[0].delta, part.choices[0].delta.content);
-      this.text += part.choices[0].delta.content;
-      this.push(this.text);
-      return;
-    }
-    this.push(null);
+  _transform(chunk, encoding, callback) {
+    this.text += chunk.toString();
+    callback(null, chunk);
   }
 
-  _end() {
-    this.onEnd(text);
-    this.push(null);
+  _flush(callback) {
+    if (this.onEnd) {
+      this.onEnd(this.text);
+    }
+    callback();
   }
 }
 
