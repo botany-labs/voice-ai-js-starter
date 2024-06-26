@@ -3,14 +3,10 @@ const OpenAI = require("openai");
 const util = require("util");
 const { float32ToPCM16, pcm16ToFloat32, createWavHeader } = require("./audio");
 const PlayHT = require("playht");
+const { createClient : Deepgram }  = require("@deepgram/sdk");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
-
-PlayHT.init({
-  userId: process.env.PLAYHT_USER_ID,
-  apiKey: process.env.PLAYHT_API_KEY,
 });
 
 const TTS_MODELS = [
@@ -21,6 +17,7 @@ const TTS_MODELS = [
   "playht/PlayHT2.0-turbo",
   "playht/PlayHT2.0",
   "playht/PlayHT1.0",
+  "deepgram/aura-asteria-en",
 ];
 
 const STT_MODELS = ["openai/whisper-1"];
@@ -40,6 +37,8 @@ class TextToSpeech {
           return tts_openai;
         case "playht":
           return tts_playhts;
+        case "deepgram":
+          return tts_deepgram;
       }
     })();
     this.model = model;
@@ -58,6 +57,14 @@ class TextToSpeech {
       if (!process.env.OPENAI_API_KEY) {
         throw new Error(
           "OPENAI_API_KEY is required to use openai for TextToSpeech"
+        );
+      }
+    }
+
+    if (provider === "deepgram") {
+      if (!process.env.DEEPGRAM_API_KEY) {
+        throw new Error(
+          "DEEPGRAM_API_KEY is required to use deepgram for TextToSpeech"
         );
       }
     }
@@ -147,6 +154,11 @@ async function tts_openai(message, model, voice) {
 }
 
 async function tts_playhts(message, model, voice) {
+  PlayHT.init({
+    userId: process.env.PLAYHT_USER_ID,
+    apiKey: process.env.PLAYHT_API_KEY,
+  });
+
   const streamingOptions = {
     voiceEngine: model,
     voiceId: voice,
@@ -190,6 +202,31 @@ async function tts_playhts(message, model, voice) {
     return;
   }
 }
+
+const tts_deepgram = async (message, model, voice) => {
+  const deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
+  // NOTE: voice not applicable
+  const response = await deepgram.speak.request({text: message}, {
+    model,
+    encoding: "linear16",
+    sample_rate: 24000,
+    container: "none",
+  });
+  
+  const stream = await response.getStream();
+  return new Promise(async (resolve, reject) => {
+    try {
+      const chunks = [];
+      for await (const chunk of stream.values()) {
+        chunks.push(chunk);
+      }
+      resolve(new Int16Array(Buffer.concat(chunks).buffer));
+    }
+    catch (err) {
+      reject(err);
+    }
+  });
+};
 
 class SpeechToText {
   constructor(model) {

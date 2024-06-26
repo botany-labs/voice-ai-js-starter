@@ -20,6 +20,8 @@ const LnlCustomerSupport = new Assistant(
   {
     speakFirstOpeningMessage: "L&L Hawaiian Barbecue, El Camino. How can I help you today?",
     llmModel: "gpt-3.5-turbo",
+    voiceModel: "deepgram/aura-asteria-en",
+    voiceName: "deepgram/aura-asteria-en",
     // NOTE: Maybe we should just disable this.
     utteranceProbability: 0,
   }
