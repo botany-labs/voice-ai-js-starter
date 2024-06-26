@@ -20,7 +20,26 @@ const TTS_MODELS = [
   "deepgram/aura-asteria-en",
 ];
 
-const STT_MODELS = ["openai/whisper-1", "deepgram/nova-2"];
+const STT_MODELS = [
+  "openai/whisper-1", 
+  "deepgram/nova-2",
+  "deepgram/nova-2-general",
+  "deepgram/nova-2-meeting",
+  "deepgram/nova-2-phonecall",
+  "deepgram/nova-2-voicemail",
+  "deepgram/nova-2-finance",
+  "deepgram/nova-2-conversationalai",
+  "deepgram/nova-2-video",
+  "deepgram/nova-2-medical",
+  "deepgram/nova-2-drivethru",
+  "deepgram/nova-2-automotive",
+  "deepgram/whisper",
+  "deepgram/whisper-tiny",
+  "deepgram/whisper-base",
+  "deepgram/whisper-small",
+  "deepgram/whisper-medium",
+  "deepgram/whisper-large",
+];
 
 class TextToSpeech {
   constructor(modelID, voice) {
@@ -229,19 +248,20 @@ const tts_deepgram = async (message, model, voice) => {
 };
 
 class SpeechToText {
-  constructor(model) {
-    this.model = model ?? 'openai/whisper-1';
-    console.log("MODEL IS ", this.model);
+  constructor(modelID) {
+    const { provider, model } = this._parseModel(modelID ?? 'openai/whisper-1');
+    this.model = model;
+    this.provider = provider;
     this.stt = (() => {
-      switch (this.model) {
-        case "deepgram/nova-2":
+      switch (this.provider) {
+        case "deepgram":
           if (!process.env.DEEPGRAM_API_KEY) {
             throw new Error(
               "DEEPGRAM_API_KEY is required to use deepgram for SpeechToText"
             );
           }
           return transcribeDeepgram;
-        case "openai/whisper-1":
+        case "openai":
         default:
             if (!process.env.OPENAI_API_KEY) {
               throw new Error(
@@ -251,8 +271,9 @@ class SpeechToText {
             return transcribeWhisper;
       }
     })();
-    if (!STT_MODELS.includes(this.model)) {
-      throw new Error(`Unsupported STT model: ${this.model}`);
+
+    if (!STT_MODELS.includes(modelID ?? 'openai/whisper-1')) {
+      throw new Error(`Unsupported STT model: ${modelID}`);
     }
   }
 
@@ -263,19 +284,28 @@ class SpeechToText {
    * @returns {Promise<string>} - The transcribed text
    */
   async transcribe(float32_pcm16) {
-    return this.stt(float32_pcm16);
+    return this.stt(this.model, float32_pcm16);
+  }
+
+  _parseModel(model) {
+    const parts = model.split("/");
+    return {
+      provider: parts[0],
+      model: parts[1],
+    };
   }
 }
 
-async function transcribeDeepgram(float32_pcm16) {
+async function transcribeDeepgram(model, float32_pcm16) {
   const deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
   const wavBlob = float32_pcm16_to_wav_blob(float32_pcm16);
 
   const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
     wavBlob,
     {
-      model: "nova-2",
+      model: model,
       smart_format: false,
+      mode: false,
     }
   );
 
@@ -283,18 +313,16 @@ async function transcribeDeepgram(float32_pcm16) {
     console.error(error);
     return;
   }
-
-  console.log("GOT", result, "CHANNELS", result.results.channels);
   const transcript = result.results.channels[0].alternatives.reduce((acc, alt) => {
     return acc + alt.transcript;
   }, "");
   return transcript;
 }
 
-async function transcribeWhisper(float32_pcm16) {
+async function transcribeWhisper(model, float32_pcm16) {
   const wavBlob = float32_pcm16_to_wav_blob(float32_pcm16);
   const transcription = await openai.audio.transcriptions.create({
-    model: "whisper-1",
+    model,
     file: wavBlob,
   });
   return transcription.text;
