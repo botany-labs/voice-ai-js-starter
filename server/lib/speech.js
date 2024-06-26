@@ -77,9 +77,7 @@ class TextToSpeech {
    * @returns {Promise<Float32Array>} - The audio data - PCM. 24k sample rate, 16 bit depth, 1 channel
    */
   async synthesize(message) {
-    console.log("STARTING");
     const pcm = new Int16Array(await this.tts(message, this.model, this.voice));
-    console.log("COMPLETED");
     return pcm16ToFloat32(pcm);
   }
 
