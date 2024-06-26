@@ -38,7 +38,7 @@ server.on("connection", (ws, req) => {
             console.log("----- CALL LOG -----");
             console.log(callLogs);
         },
-        speechToTextModel: "deepgram/nova-2",
+        speechToTextModel: "deepgram:live/nova-2",
     });
     conversation.begin(1000);
 

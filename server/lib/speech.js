@@ -3,7 +3,8 @@ const OpenAI = require("openai");
 const util = require("util");
 const { float32ToPCM16, pcm16ToFloat32, float32_pcm16_to_wav_blob } = require("./audio");
 const PlayHT = require("playht");
-const { createClient : Deepgram }  = require("@deepgram/sdk");
+const { createClient : Deepgram, LiveTranscriptionEvents }  = require("@deepgram/sdk");
+const { clearInterval } = require("timers");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -39,6 +40,8 @@ const STT_MODELS = [
   "deepgram/whisper-small",
   "deepgram/whisper-medium",
   "deepgram/whisper-large",
+  // Streaming WS
+  "deepgram:live/nova-2",
 ];
 
 class TextToSpeech {
@@ -261,8 +264,16 @@ class SpeechToText {
             );
           }
           return transcribeDeepgram;
+
+        case "deepgram:live":
+          if (!process.env.DEEPGRAM_API_KEY) {
+            throw new Error(
+              "DEEPGRAM_API_KEY is required to use deepgram for SpeechToText"
+            );
+          }
+          const transcriber = new DeepgramRealtimeTranscriber(model, {keepAlive: true, connectOnInit: true});
+          return transcriber.transcribe.bind(transcriber);
         case "openai":
-        default:
             if (!process.env.OPENAI_API_KEY) {
               throw new Error(
                 "OPENAI_API_KEY is required to use openai for SpeechToText"
@@ -326,6 +337,98 @@ async function transcribeWhisper(model, float32_pcm16) {
     file: wavBlob,
   });
   return transcription.text;
+}
+
+
+class DeepgramRealtimeTranscriber {
+
+  /**
+   * @param {string} model - Deepgram model to use
+   * @param {object} options - Options for the transcriber
+   * @param {boolean} options.keepAlive - Whether to keep the connection alive
+   * @param {boolean} options.connectOnInit - Connect in constructor? Defaults to false.
+   */
+  constructor(model, options={}) {
+    this.model = model;
+    this.deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
+    this._connection = null;
+    this.connectionOpen = false;
+    this.keepAlive = options.keepAlive ?? true;
+    this.keepAliveInterval = setInterval(this.keepAliveLoop.bind(this), 5000);
+    if (options.connectOnInit ?? false) {
+      this.getConnection();
+    }
+  }
+
+  async transcribe(model, float32_pcm16) {
+    // ignore model;
+    const connection = await this.getConnection();
+
+    if (!this.connectionOpen) {
+      throw new Error("Deepgram connection not open");
+    }
+
+   return new Promise((resolve, reject) => {
+    connection.once(LiveTranscriptionEvents.Transcript,(data) => {
+      const transcript = data.channel.alternatives[0].transcript;
+      resolve(transcript);
+    })
+    const aspcmInt16 = float32ToPCM16(float32_pcm16);
+    connection.send(aspcmInt16);
+   })
+  }
+
+  async getConnection() {
+    if (this._connection) {
+      return this._connection;
+    }
+
+    let promiseResolve, promiseReject;
+    this._connection = new Promise((resolve, reject) => {
+      promiseResolve = resolve;
+      promiseReject = reject;
+    });
+
+    const connection = this.deepgram.listen.live({
+      model: this.model,
+      encoding: "linear16",
+      sample_rate: 24000,
+      smart_format: false,
+    });
+
+    try {
+      const setupTimeout = setTimeout(() => promiseReject("Failed to setup deepgram connection"), 5000);
+      connection.on(LiveTranscriptionEvents.Open, () => {
+        this.connectionOpen = true;
+        console.log("Deepgram Live Connection opened.");
+        clearTimeout(setupTimeout);
+        promiseResolve(connection);
+  
+        connection.on(LiveTranscriptionEvents.Close, () => {
+          this.connectionOpen = false;
+          clearInterval(this.keepAliveInterval);
+          console.log("Deepgram Live Connection closed.");
+        })
+        connection.on(LiveTranscriptionEvents.Error, (err) => {
+          console.error(err);
+        })
+      });
+    } catch (err) {
+      promiseReject(err);
+    }
+
+    return this._connection;
+  }
+
+  async keepAliveLoop() {
+    const connection = await this._connection;
+    if (connection && this.connectionOpen && connection.keepAlive) {
+      connection.keepAlive();
+    }
+    else {
+      clearInterval(this.keepAliveInterval);
+    }
+  }
 }
 
 module.exports = {
