@@ -19,8 +19,6 @@ const LnlCustomerSupport = new Assistant(
     If the user has already said bye, just hang up.`,
   {
     speakFirstOpeningMessage: "L&L Hawaiian Barbecue, El Camino. How can I help you today?",
-    voiceModel: "openai/tts-1",
-    voiceName: "alloy",
     llmModel: "gpt-3.5-turbo",
     // NOTE: Maybe we should just disable this.
     utteranceProbability: 0,

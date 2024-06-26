@@ -2,9 +2,15 @@ const fetch = require("node-fetch");
 const OpenAI = require("openai");
 const util = require("util");
 const { float32ToPCM16, pcm16ToFloat32, createWavHeader } = require("./audio");
+const PlayHT = require("playht");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+PlayHT.init({
+  userId: process.env.PLAYHT_USER_ID,
+  apiKey: process.env.PLAYHT_API_KEY,
 });
 
 const TTS_MODELS = [
@@ -12,36 +18,57 @@ const TTS_MODELS = [
   "elevenlabs/eleven_turbo_v2",
   "openai/tts-1",
   "openai/tts-1-hd",
+  "playht/PlayHT2.0-turbo",
+  "playht/PlayHT2.0",
+  "playht/PlayHT1.0",
 ];
 
-const STT_MODELS = [
-  "openai/whisper-1",
-];
+const STT_MODELS = ["openai/whisper-1"];
 
 class TextToSpeech {
-
   constructor(modelID, voice) {
     if (!TTS_MODELS.includes(modelID)) {
       throw new Error(`Unsupported TTS model: ${modelID}`);
     }
     const { provider, model } = this._parseModel(modelID);
-    this.tts = provider === "elevenlabs" ? tts_elevenlabs : tts_openai;
+
+    this.tts = (() => {
+      switch (provider) {
+        case "elevenlabs":
+          return tts_elevenlabs;
+        case "openai":
+          return tts_openai;
+        case "playht":
+          return tts_playhts;
+      }
+    })();
     this.model = model;
     this.voice = voice;
 
     // Do check for creds
     if (provider === "elevenlabs") {
       if (!process.env.ELEVEN_LABS_API_KEY) {
-        throw new Error("ELEVEN_LABS_API_KEY is required to use elevenlabs for TextToSpeech");
+        throw new Error(
+          "ELEVEN_LABS_API_KEY is required to use elevenlabs for TextToSpeech"
+        );
       }
     }
 
     if (provider === "openai") {
       if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OPENAI_API_KEY is required to use openai for TextToSpeech");
+        throw new Error(
+          "OPENAI_API_KEY is required to use openai for TextToSpeech"
+        );
       }
     }
 
+    if (provider === "playht") {
+      if (!process.env.PLAYHT_USER_ID || !process.env.PLAYHT_API_KEY) {
+        throw new Error(
+          "PLAYHT_USER_ID and PLAYHT_API_KEY are required to use playht for TextToSpeech"
+        );
+      }
+    }
   }
 
   /**
@@ -50,7 +77,9 @@ class TextToSpeech {
    * @returns {Promise<Float32Array>} - The audio data - PCM. 24k sample rate, 16 bit depth, 1 channel
    */
   async synthesize(message) {
+    console.log("STARTING");
     const pcm = new Int16Array(await this.tts(message, this.model, this.voice));
+    console.log("COMPLETED");
     return pcm16ToFloat32(pcm);
   }
 
@@ -62,7 +91,6 @@ class TextToSpeech {
     };
   }
 }
-
 
 async function tts_elevenlabs(message, model, voice) {
   const body = {
@@ -120,8 +148,56 @@ async function tts_openai(message, model, voice) {
   return arrayBuffer;
 }
 
-class SpeechToText {
+async function tts_playhts(message, model, voice) {
+  const streamingOptions = {
+    // must use turbo for the best latency
+    voiceEngine: model,
+    // this voice id can be one of our prebuilt voices or your own voice clone id, refer to the`listVoices()` method for a list of supported voices.
+    voiceId: voice,
+    // you can pass any value between 8000 and 48000, 24000 is default
+    sampleRate: 24000,
+    // the generated audio encoding, supports 'raw' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'mulaw'
+    outputFormat: "wav",
+    // playback rate of generated speech
+    speed: 1,
+    // quality
+    quality: "low",
+  };
+  try {
+    const stream = await PlayHT.stream(message, streamingOptions);
+    return await new Promise((resolve, reject) => {
+      const chunks = [];
+      let totalSize = 0;
 
+      stream.on("data", (chunk) => {
+        chunks.push(chunk);
+        totalSize += chunk.length;
+      });
+
+      stream.on("end", () => {
+        const final = Buffer.alloc(totalSize);
+        let offset = 0;
+        for (const chunk of chunks) {
+          final.set(chunk, offset);
+          offset += chunk.length;
+        }
+        // slice off first 44 bytes for wav header
+        const audio = final.slice(44);
+
+        resolve(new Int16Array(audio.buffer));
+      });
+
+      stream.on("error", (err) => {
+        reject(err);
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    return;
+  }
+}
+
+class SpeechToText {
   constructor(model) {
     this.model = model;
     if (!STT_MODELS.includes(model)) {
@@ -131,7 +207,7 @@ class SpeechToText {
 
   /**
    * Transcribe audio. (only whisper-1 is supported for now)
-   * @param {Float32Array[]} samples - The audio samples as an array of Float32Arrays. 
+   * @param {Float32Array[]} samples - The audio samples as an array of Float32Arrays.
    * Samples should be in 24k sample rate, 16 bit depth, 1 channel format. Stored as Float32Arrays of length 1024.
    * @returns {Promise<string>} - The transcribed text
    */
@@ -178,4 +254,11 @@ async function transcribeWhisper(audioSamples) {
   return transcription.text;
 }
 
-module.exports = { TextToSpeech, SpeechToText, tts_elevenlabs, tts_openai, transcribeWhisper, TTS_MODELS };
+module.exports = {
+  TextToSpeech,
+  SpeechToText,
+  tts_elevenlabs,
+  tts_openai,
+  transcribeWhisper,
+  TTS_MODELS,
+};

@@ -15,6 +15,7 @@
     "express": "^4.19.2",
     "node-fetch": "^2.7.0",
     "openai": "^4.52.0",
+    "playht": "^0.9.8",
     "ws": "^8.17.1"
   },
   "devDependencies": {
