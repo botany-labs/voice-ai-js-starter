@@ -148,18 +148,14 @@ async function tts_openai(message, model, voice) {
 
 async function tts_playhts(message, model, voice) {
   const streamingOptions = {
-    // must use turbo for the best latency
     voiceEngine: model,
-    // this voice id can be one of our prebuilt voices or your own voice clone id, refer to the`listVoices()` method for a list of supported voices.
     voiceId: voice,
-    // you can pass any value between 8000 and 48000, 24000 is default
     sampleRate: 24000,
-    // the generated audio encoding, supports 'raw' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'mulaw'
+    // This is a hack because im not sure why "raw" sounds so weird. 
+    // With wav, we take off the first 44 bytes that make up the wav header
+    // and it's effectively pcm.
     outputFormat: "wav",
-    // playback rate of generated speech
     speed: 1,
-    // quality
-    quality: "low",
   };
   try {
     const stream = await PlayHT.stream(message, streamingOptions);
