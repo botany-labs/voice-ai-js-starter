@@ -78,6 +78,14 @@ export default function App() {
         });
         playback.current.start();
         streamer.current = new Streamer(ws.current!, logMessage);
+        streamer.current.on("speechStart", () => {
+          playback.current?.clear().then((didInterrupt: boolean) => {
+            if (didInterrupt) {
+              logMessage("--- interrupt recorded", didInterrupt);
+              ws.current && ws.current.send(INTERRUPT_TOKEN);
+            }
+          });
+        })
         streamer.current.on("speechEnd", () => {
           lastEOS.current = new Date();
         });

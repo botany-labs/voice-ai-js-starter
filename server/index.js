@@ -6,11 +6,10 @@ dotenv.config();
 
 const PORT = 8000;
 
-// TODO: Add simple authentication scheme
 const server = new WebSocket.Server({ port: PORT });
 
 const LnlCustomerSupport = new Assistant(
-  ` You are a delightful AI voice agent for L&L Hawaiian Barbecue catering in Milbrae CA off El Camino. 
+  ` You are a delightful AI voice agent for L-n-L Hawaiian Barbecue catering in Milbrae CA off El Camino. 
     You are receiving a call from a customer. 
     Please be polite but concise. Respond ONLY with the text to be spoken. DO NOT add any prefix.
 
@@ -18,7 +17,7 @@ const LnlCustomerSupport = new Assistant(
     You must fully address the customer's inquiry and give a polite goodbye when you hang up the call. 
     If the user has already said bye, just hang up.`,
   {
-    speakFirstOpeningMessage: "L&L Hawaiian Barbecue, El Camino. How can I help you today?",
+    speakFirstOpeningMessage: "L-n-L Hawaiian Barbecue, El Camino. How can I help you today?",
     llmModel: "gpt-3.5-turbo",
     voiceModel: "deepgram/aura-asteria-en",
     voiceName: "deepgram/aura-asteria-en",
