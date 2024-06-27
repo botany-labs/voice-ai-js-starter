@@ -134,10 +134,10 @@ export default function App() {
             Begin Call
           </button>
         )}
-        <div className="flex w-full justify-center items-center mt-8">
+        <div className="flex flex-col w-full justify-center items-start mt-8">
           <div className="text-yellow-300 mr-2"> Configuration: </div>
           <select
-            className="text-yellow-100 bg-black border px-4 my-1 rounded-md"
+            className="text-yellow-100 bg-black border px-2 my-1 rounded-md"
             value={assistant}
             onChange={(e) => setAssistant(e.target.value as any)}
             disabled={isRecording}
