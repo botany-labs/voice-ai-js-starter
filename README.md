@@ -1,6 +1,9 @@
 # Fullstack AI Voice Assistant Starter Project
 
-## DEMO
+### Demo Video
+[![Screenshot of the demo](./demo-placeholder.png)](https://www.youtube.com/watch?v=Cc38Z536suc)
+
+### Try it yourself
 [https://voiceai-js-starter.vercel.app/](https://voiceai-js-starter.vercel.app/)
 
 ----------------------------------------------
