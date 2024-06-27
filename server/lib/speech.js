@@ -13,33 +13,19 @@ const openai = new OpenAI({
 const TTS_MODELS = [
   "elevenlabs/eleven_monolingual_v1",
   "elevenlabs/eleven_turbo_v2",
+  "elevenlabs/eleven_multilingual_v2",
   "openai/tts-1",
   "openai/tts-1-hd",
   "playht/PlayHT2.0-turbo",
   "playht/PlayHT2.0",
   "playht/PlayHT1.0",
-  "deepgram/aura-asteria-en",
+  "deepgram/aura",
 ];
 
 const STT_MODELS = [
   "openai/whisper-1", 
   "deepgram/nova-2",
-  "deepgram/nova-2-general",
-  "deepgram/nova-2-meeting",
-  "deepgram/nova-2-phonecall",
-  "deepgram/nova-2-voicemail",
-  "deepgram/nova-2-finance",
-  "deepgram/nova-2-conversationalai",
-  "deepgram/nova-2-video",
-  "deepgram/nova-2-medical",
-  "deepgram/nova-2-drivethru",
-  "deepgram/nova-2-automotive",
   "deepgram/whisper",
-  "deepgram/whisper-tiny",
-  "deepgram/whisper-base",
-  "deepgram/whisper-small",
-  "deepgram/whisper-medium",
-  "deepgram/whisper-large",
   // Streaming WS
   "deepgram:live/nova-2",
 ];
@@ -224,11 +210,15 @@ async function tts_playhts(message, model, voice) {
   }
 }
 
+// NOTE: Deepgram usese the format {model}-{voice}-{language} (i.e. aura-luna-en).
+// User should provide luna-en as the voice to use.
 const tts_deepgram = async (message, model, voice) => {
   const deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
+
+  const deepgramModel = model + '-' + voice;
   // NOTE: voice not applicable
   const response = await deepgram.speak.request({text: message}, {
-    model,
+    model: deepgramModel,
     encoding: "linear16",
     sample_rate: 24000,
     container: "none",
