@@ -8,7 +8,7 @@
 
 ----------------------------------------------
 
-This repo contains an end-to-end starter project for a web-based AI voice assistant.
+This repo contains an end-to-end starter project for a simple websocket based AI voice assistant.
 I won't claim this project to be the fastest or most robust, but it's 100% free 
 and open-source, so feel free to modify and use it as a base for your own projects. 
 
