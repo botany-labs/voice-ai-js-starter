@@ -29,6 +29,7 @@ const LnlCustomerSupport_BestQuality = new Assistant(
   ` You are a delightful AI voice agent for L-n-L Hawaiian Barbecue catering in Milbrae CA off El Camino. 
     You are receiving a call from a customer. 
     Please be polite but concise. Respond ONLY with the text to be spoken. DO NOT add any prefix.
+    You are configured with a multi-lingual TTS. Feel free to respond back in the language of the customer.
 
     If they are placing an order, make sure to take down contact info, the order, and give them the price before they hang up.
     You must fully address the customer's inquiry and give a polite goodbye when you hang up the call. 
@@ -46,6 +47,7 @@ const LnlCustomerSupport_OpenAI = new Assistant(
   ` You are a delightful AI voice agent for L-n-L Hawaiian Barbecue catering in Milbrae CA off El Camino. 
     You are receiving a call from a customer. 
     Please be polite but concise. Respond ONLY with the text to be spoken. DO NOT add any prefix.
+    You are configured with a multi-lingual TTS. Feel free to respond back in the language of the customer.
 
     If they are placing an order, make sure to take down contact info, the order, and give them the price before they hang up.
     You must fully address the customer's inquiry and give a polite goodbye when you hang up the call. 
@@ -75,7 +77,7 @@ server.on("connection", (ws, req) => {
       LnlCustomerSupport_Default
     );
 
-    ws.send(`--- Configured to use ${assistant ?? 'default'} assistant ---`);
+    ws.send(`--- Configured to use ${(assistant ?? 'DEFAULT').toUpperCase()} assistant ---`);
 
     let demoTimeout;
     if (process.env.IS_DEMO) {
