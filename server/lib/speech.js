@@ -13,33 +13,19 @@ const openai = new OpenAI({
 const TTS_MODELS = [
   "elevenlabs/eleven_monolingual_v1",
   "elevenlabs/eleven_turbo_v2",
+  "elevenlabs/eleven_multilingual_v2",
   "openai/tts-1",
   "openai/tts-1-hd",
   "playht/PlayHT2.0-turbo",
   "playht/PlayHT2.0",
   "playht/PlayHT1.0",
-  "deepgram/aura-asteria-en",
+  "deepgram/aura",
 ];
 
 const STT_MODELS = [
   "openai/whisper-1", 
   "deepgram/nova-2",
-  "deepgram/nova-2-general",
-  "deepgram/nova-2-meeting",
-  "deepgram/nova-2-phonecall",
-  "deepgram/nova-2-voicemail",
-  "deepgram/nova-2-finance",
-  "deepgram/nova-2-conversationalai",
-  "deepgram/nova-2-video",
-  "deepgram/nova-2-medical",
-  "deepgram/nova-2-drivethru",
-  "deepgram/nova-2-automotive",
   "deepgram/whisper",
-  "deepgram/whisper-tiny",
-  "deepgram/whisper-base",
-  "deepgram/whisper-small",
-  "deepgram/whisper-medium",
-  "deepgram/whisper-large",
   // Streaming WS
   "deepgram:live/nova-2",
 ];
@@ -50,7 +36,6 @@ class TextToSpeech {
       throw new Error(`Unsupported TTS model: ${modelID}`);
     }
     const { provider, model } = this._parseModel(modelID);
-
     this.tts = (() => {
       switch (provider) {
         case "elevenlabs":
@@ -225,11 +210,15 @@ async function tts_playhts(message, model, voice) {
   }
 }
 
+// NOTE: Deepgram usese the format {model}-{voice}-{language} (i.e. aura-luna-en).
+// User should provide luna-en as the voice to use.
 const tts_deepgram = async (message, model, voice) => {
   const deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
+
+  const deepgramModel = model + '-' + voice;
   // NOTE: voice not applicable
   const response = await deepgram.speak.request({text: message}, {
-    model,
+    model: deepgramModel,
     encoding: "linear16",
     sample_rate: 24000,
     container: "none",
@@ -255,6 +244,7 @@ class SpeechToText {
     const { provider, model } = this._parseModel(modelID ?? 'openai/whisper-1');
     this.model = model;
     this.provider = provider;
+    this.sttObject = null;
     this.stt = (() => {
       switch (this.provider) {
         case "deepgram":
@@ -272,6 +262,7 @@ class SpeechToText {
             );
           }
           const transcriber = new DeepgramRealtimeTranscriber(model, {keepAlive: true, connectOnInit: true});
+          this.sttObject = transcriber;
           return transcriber.transcribe.bind(transcriber);
         case "openai":
             if (!process.env.OPENAI_API_KEY) {
@@ -296,6 +287,10 @@ class SpeechToText {
    */
   async transcribe(float32_pcm16) {
     return this.stt(this.model, float32_pcm16);
+  }
+
+  async destroy() {
+    this.sttObject?.destroy();
   }
 
   _parseModel(model) {
@@ -339,22 +334,25 @@ async function transcribeWhisper(model, float32_pcm16) {
   return transcription.text;
 }
 
-
+// TODO: Refactor to stream up audio in realtime instead of giving it all in the .transcribe.
 class DeepgramRealtimeTranscriber {
-
   /**
    * @param {string} model - Deepgram model to use
    * @param {object} options - Options for the transcriber
    * @param {boolean} options.keepAlive - Whether to keep the connection alive
+   * @param {number} options.waitTimeAfterFirstChunk - Time to wait for transcription to finish. Default 200ms
    * @param {boolean} options.connectOnInit - Connect in constructor? Defaults to false.
    */
   constructor(model, options={}) {
     this.model = model;
     this.deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
+    this.waitTimeAfterFirstChunk = options.waitTimeAfterFirstChunk ?? 200;
     this._connection = null;
     this.connectionOpen = false;
     this.keepAlive = options.keepAlive ?? true;
     this.keepAliveInterval = setInterval(this.keepAliveLoop.bind(this), 5000);
+    // {ts: Time, text: Transcript}
+    this.transcriptBuffer = [];
     if (options.connectOnInit ?? false) {
       this.getConnection();
     }
@@ -368,13 +366,18 @@ class DeepgramRealtimeTranscriber {
       throw new Error("Deepgram connection not open");
     }
 
-   return new Promise((resolve, reject) => {
-    connection.once(LiveTranscriptionEvents.Transcript,(data) => {
-      const transcript = data.channel.alternatives[0].transcript;
-      resolve(transcript);
-    })
+    const submittedTime = Date.now();
     const aspcmInt16 = float32ToPCM16(float32_pcm16);
     connection.send(aspcmInt16);
+   
+   return await new Promise((resolve, reject) => {
+    connection.once(LiveTranscriptionEvents.Transcript, (data) => {
+      setTimeout(() => {
+        const transcription = this.transcriptBuffer?.filter((t) => t.ts > submittedTime).map((t) => t.text).join(" ");
+        this.transcriptBuffer = [];
+        resolve(transcription ?? '');
+      }, this.waitTimeAfterFirstChunk);
+    })
    })
   }
 
@@ -394,6 +397,9 @@ class DeepgramRealtimeTranscriber {
       encoding: "linear16",
       sample_rate: 24000,
       smart_format: false,
+      interim_results: true,
+      numerals: true,
+      endpointing: 200,
     });
 
     try {
@@ -403,12 +409,25 @@ class DeepgramRealtimeTranscriber {
         console.log("Deepgram Live Connection opened.");
         clearTimeout(setupTimeout);
         promiseResolve(connection);
+
+        connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+          const isFinal = data.is_final;
+          if (!isFinal) {
+            return;
+          }
+          const transcript = data.channel.alternatives.reduce((acc, alt) => {
+            return acc + alt.transcript;
+          }, "");
+          console.log("GOT", transcript);
+          this.transcriptBuffer.push({ts: Date.now(), text: transcript});
+        })
   
         connection.on(LiveTranscriptionEvents.Close, () => {
           this.connectionOpen = false;
           clearInterval(this.keepAliveInterval);
           console.log("Deepgram Live Connection closed.");
         })
+
         connection.on(LiveTranscriptionEvents.Error, (err) => {
           console.error(err);
         })
@@ -429,6 +448,13 @@ class DeepgramRealtimeTranscriber {
       clearInterval(this.keepAliveInterval);
     }
   }
+
+  async destroy () {
+    if (this.connectionOpen) {
+      (await this._connection).finish();
+    }
+  }
+  
 }
 
 module.exports = {

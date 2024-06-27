@@ -29,6 +29,7 @@ export default function App() {
   const streamer = useRef<Streamer | null>(null);
   const playback = useRef<Playback | null>(null);
   const lastEOS = useRef<Date | null>(null);
+  const [assistant, setAssistant] = useState<"fastest" | "best-quality" | "openai">("fastest");
 
   const stopRecording = (graceful: boolean = false) => {
     setIsRecording(false);
@@ -42,7 +43,9 @@ export default function App() {
   const startRecording = async () => {
     setIsRecording(true);
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      ws.current = new WebSocket(SERVER_WS_URL);
+      ws.current = new WebSocket(
+        SERVER_WS_URL + "?assistant=" + assistant ?? "default"
+      );
       ws.current.binaryType = "arraybuffer";
       ws.current.onopen = () => {
         ws.current &&
@@ -57,12 +60,11 @@ export default function App() {
                 }
               });
             } else if (event.data === START_LISTENING_TOKEN) {
-              playback.current?.once('playbackEnd', () => {
-                logMessage('--- starting vad');
+              playback.current?.once("playbackEnd", () => {
+                logMessage("--- starting vad");
                 streamer.current?.startVoiceDetection();
-              })
-            }
-             else {
+              });
+            } else {
               logMessage(event.data);
             }
           });
@@ -85,7 +87,7 @@ export default function App() {
               ws.current && ws.current.send(INTERRUPT_TOKEN);
             }
           });
-        })
+        });
         streamer.current.on("speechEnd", () => {
           lastEOS.current = new Date();
         });
@@ -113,7 +115,7 @@ export default function App() {
         </h1>
         <p className="text-sm">For best results, use headphones.</p>
       </div>
-      <div className="my-8 flex">
+      <div className="my-8 flex flex-col">
         {isRecording ? (
           <button
             onClick={() => stopRecording(false)}
@@ -129,6 +131,24 @@ export default function App() {
             Begin Call
           </button>
         )}
+        <div className="flex w-full justify-center items-center mt-8">
+          <div className="text-yellow-300 mr-2"> Configuration: </div>
+          <select
+            className="text-yellow-100 bg-black border px-4 my-1 rounded-md"
+            value={assistant}
+            onChange={(e) => setAssistant(e.target.value as any)}
+            disabled={isRecording}
+          >
+            <option value="fastest"> Fastest </option>
+            <option value="best-quality">Best Quality </option>
+            <option value="openai">OpenAI Only (decently fast, also multilinugal!)</option>
+          </select>
+        </div>
+        <div className="text-yellow-100 text-sm w-full flex justify-center items-center">
+            {assistant === 'fastest' && <> TTS: Deepgram Nova-2 Streaming / STT: Deepgram Aura / LLM: ChatGPT 3.5 Turbo </>}
+            {assistant === 'best-quality' && <> TTS: OpenAI Whisper / STT: Elevenlabs Turbo V2 / LLM: ChatGPT 3.5 Turbo </>}
+            {assistant === 'openai' && <> TTS: OpenAI Whisper / STT: OpenAI TTS-1 / LLM: ChatGPT 3.5 Turbo </>}
+          </div>
       </div>
       <Logs />
     </main>
@@ -245,7 +265,7 @@ class Streamer extends EventEmitter {
       this.processor.connect(audioContext.destination);
     });
     if (startVoiceDetection) {
-        await this.startVoiceDetection();
+      await this.startVoiceDetection();
     }
   }
 
@@ -280,8 +300,8 @@ class Playback extends EventEmitter {
         event.outputBuffer.getChannelData(0).set(this.samples[0]);
         this.samples.shift();
       } else {
-        if (this.lastFramePlayed === 'non-silence') {
-          this.emit('playbackEnd');
+        if (this.lastFramePlayed === "non-silence") {
+          this.emit("playbackEnd");
         }
         this.lastFramePlayed = "silence";
         const silence = new Float32Array(1024);

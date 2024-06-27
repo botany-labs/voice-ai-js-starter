@@ -77,13 +77,6 @@ class CallConversation {
       this.call.pushMeta(CLEAR_BUFFER_TOKEN);
       this.noteWhatWasSaid("user", message);
 
-      const utterance = await this.assistant.createUtterance();
-      if (utterance) {
-        this.noteWhatWasSaid("assistant", utterance);
-        const audio = await this.assistant.textToSpeech(utterance);
-        this.call.pushAudio(audio);
-      }
-
       const { content, selectedTool } = await this.call._profileIt("responseGeneration", async () => {
         return await this.assistant.createResponse(this.history);
       });
@@ -165,6 +158,7 @@ class WebCall extends EventEmitter {
     this.ws.on("message", this._onWebsocketMessage.bind(this));
     this.ws.on("close", () => {
       this.emit("callEnded");
+      this.stt.destroy();
     });
   }
 
