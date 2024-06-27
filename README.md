@@ -1,4 +1,8 @@
 # Fullstack AI Voice Assistant Starter Project
+
+## DEMO
+[https://voiceai-js-starter.vercel.app/](https://voiceai-js-starter.vercel.app/)
+
 ----------------------------------------------
 
 This repo contains an end-to-end starter project for a web-based AI voice assistant.
@@ -50,7 +54,4 @@ This will start the server on `localhost:8000`
 ## Your first configuration
 The toy example configured in this project is a simple ordering assistant for L&L Hawaiian BBQ.
 To create your own assistant, take a look at `server/index.starter.js` and follow the instructions.
-
-## DEMO
-[https://voiceai-js-starter.vercel.app/](https://voiceai-js-starter.vercel.app/)
 
