@@ -1,4 +1,4 @@
-const { TextToSpeech } = require("./speech");
+const { TextToSpeech, SpeechToText } = require("./speech");
 const { CallConversation } = require("./call");
 const OpenAI = require("openai");
 const openai = new OpenAI({
@@ -17,12 +17,11 @@ class Assistant {
    * @param {string} [options.llmModel] - LLM model to use. Defaults to "gpt-3.5-turbo".
    * @param {string} [options.voiceModel] - Voice model to use. Defaults to "openai/tts-1". See TTS_MODELS (./speech.js) for supported models.
    * @param {string} [options.voiceName] - Voice name to use. Defaults to "shimmer".
+   * @param {string} [options.speechToTextModel] - Speech-to-text model to use. Defaults to "openai/whisper-1". See SPEECH_TO_TEXT_MODELS (./speech.js) for supported models.
    * @param {string} [options.systemPrompt] - System prompt to give your assistant.
    * @param {string} [options.speakFirstOpeningMessage] - Opening message to give your assistant to say once the call starts. If not provided, the assistant will just be prompted to speak.
    * @param {string} [options.speakFirst] - Speak first? Defaults to true.
    * @param {string} [options.canHangUp] - Can hang up? Defaults to true.
-   * @param {string[]} [options.utterances] - Affirmations to give your assistant. Defaults to `DEFAULT_UTTERANCES`
-   * @param {number} [options.utteranceProbability] - Probability of utterance. Defaults to `DEFAULT_UTTERANCE_PROBABILITY`
    */
   constructor(instructions, options = {}) {
     this.instructions = instructions;
@@ -30,12 +29,10 @@ class Assistant {
     this.tools = options.canHangUp === false ? TOOLS_NONE : TOOL_HANG_UP; // NOTE: only tool supported right now is hang-up
     this.speakFirst = options.speakFirst ?? true;
     this.speakFirstOpeningMessage = options.speakFirstOpeningMessage;
-    this.utterances = options.utterances ?? DEFAULT_UTTERANCES;
-    this.utteranceProbability =
-      options.utteranceProbability ?? DEFAULT_UTTERANCE_PROBABILITY;
     this.llmModel = options.llmModel ?? "gpt-3.5-turbo";
     this.voiceModel = options.voiceModel ?? "openai/tts-1";
     this.voiceName = options.voiceName ?? "shimmer";
+    this.speechToTextModel = options.speechToTextModel ?? "openai/whisper-1";
     this.tts = new TextToSpeech(this.voiceModel, this.voiceName);
   }
 
@@ -101,19 +98,7 @@ class Assistant {
       selectedTool,
     };
   }
-
-  async createUtterance() {
-    if (this.utterances.length === 0) {
-      return;
-    }
-    const random = Math.random();
-    if (random < this.utteranceProbability) {
-      return this.utterances[
-        Math.floor(Math.random() * this.utterances.length)
-      ];
-    }
-  }
-
+  
   async textToSpeech(content) {
     const result = await this.tts.synthesize(content);
     return result;
@@ -125,14 +110,10 @@ class Assistant {
    * @param {object} [options] - Options to give your assistant.
    */
   createConversation(ws, options={}) {
+    options.speechToTextModel = this.speechToTextModel;
     return new CallConversation(this, ws, options);
   }
 }
-
-// ----- Constants -----
-
-const DEFAULT_UTTERANCES = ["Got it.", "Yeah.", "I see.", "Okay.", "Right."];
-const DEFAULT_UTTERANCE_PROBABILITY = 0.8;
 
 // ----- Prompting ------
 
