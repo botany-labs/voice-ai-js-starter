@@ -19,8 +19,8 @@ const LnlCustomerSupport = new Assistant(
   {
     speakFirstOpeningMessage: "L-n-L Hawaiian Barbecue, El Camino. How can I help you today?",
     llmModel: "gpt-3.5-turbo",
-    voiceModel: "deepgram/aura-asteria-en",
-    voiceName: "deepgram/aura-asteria-en",
+    // voiceModel: "deepgram/aura-asteria-en",
+    // voiceName: "deepgram/aura-asteria-en",
     // NOTE: Maybe we should just disable this.
     utteranceProbability: 0,
   }
@@ -37,7 +37,7 @@ server.on("connection", (ws, req) => {
             console.log("----- CALL LOG -----");
             console.log(callLogs);
         },
-        speechToTextModel: "deepgram:live/nova-2",
+        // speechToTextModel: "deepgram:live/nova-2",
     });
     conversation.begin(2000);
 
