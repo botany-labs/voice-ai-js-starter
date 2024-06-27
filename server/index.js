@@ -21,7 +21,7 @@ const LnlCustomerSupport_Fastest = new Assistant(
     llmModel: "gpt-3.5-turbo",
     speechToTextModel: "deepgram:live/nova-2",
     voiceModel: "deepgram/aura",
-    voiceName: "luna-en",
+    voiceName: "asteria-en",
   }
 );
 
