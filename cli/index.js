@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const { execSync } = require('child_process');
 const chalk = require('chalk');
 const inquirer = require('inquirer');
@@ -34,13 +35,13 @@ async function main() {
     ]);
 
     let apiKeys = {};
-    if (answers.configuration.includes('Easy Setup')) {
+    if (answers.configuration === 'easy') {
         apiKeys.openai = (await inquirer.prompt({
             type: 'input',
             name: 'openai',
             message: `You selected ${chalk.magenta.bold('Easy Setup')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}.`,
         })).openai;
-    } else if (answers.configuration.includes('Fastest Performance')) {
+    } else if (answers.configuration === 'fastest') {
         apiKeys.openai = (await inquirer.prompt({
             type: 'input',
             name: 'openai',
@@ -51,7 +52,7 @@ async function main() {
             name: 'deepgram',
             message: `You selected ${chalk.magenta.bold('Fastest Performance')}. This will require you to provide your ${chalk.yellow.bold('Deepgram API key')}.`,
         })).deepgram;
-    } else if (answers.configuration.includes('Best Quality')) {
+    } else if (answers.configuration === 'best') {
         apiKeys.openai = (await inquirer.prompt({
             type: 'input',
             name: 'openai',

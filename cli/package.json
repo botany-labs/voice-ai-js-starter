@@ -1,8 +1,12 @@
 {
-  "name": "create-voice-app",
-  "version": "0.0.1",
+  "name": "create-voice-ai",
+  "version": "0.0.4",
   "description": "Quickly bootstrap an AI-voice assistant",
   "main": "index.js",
+  "bin": {
+    "create-voice-app": "./index.js",
+    "create-voice-ai": "./index.js"
+  },
   "scripts": {
     "start": "node index.js"
   },
