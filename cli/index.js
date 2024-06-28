@@ -39,29 +39,29 @@ async function main() {
         apiKeys.openai = (await inquirer.prompt({
             type: 'input',
             name: 'openai',
-            message: `You selected ${chalk.magenta.bold('Easy Setup')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}.`,
+            message: `You selected ${chalk.magenta.bold('Easy Setup')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}:`,
         })).openai;
     } else if (answers.configuration === 'fastest') {
         apiKeys.openai = (await inquirer.prompt({
             type: 'input',
             name: 'openai',
-            message: `You selected ${chalk.magenta.bold('Fastest Performance')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}.`,
+            message: `You selected ${chalk.magenta.bold('Fastest Performance')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}:`,
         })).openai;
         apiKeys.deepgram = (await inquirer.prompt({
             type: 'input',
             name: 'deepgram',
-            message: `You selected ${chalk.magenta.bold('Fastest Performance')}. This will require you to provide your ${chalk.yellow.bold('Deepgram API key')}.`,
+            message: `You selected ${chalk.magenta.bold('Fastest Performance')}. This will require you to provide your ${chalk.yellow.bold('Deepgram API key')}:`,
         })).deepgram;
     } else if (answers.configuration === 'best') {
         apiKeys.openai = (await inquirer.prompt({
             type: 'input',
             name: 'openai',
-            message: `You selected ${chalk.magenta.bold('Best Quality')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}.`,
+            message: `You selected ${chalk.magenta.bold('Best Quality')}. This will require you to provide your ${chalk.yellow.bold('OpenAI API key')}:`,
         })).openai;
         apiKeys.elevenLabs = (await inquirer.prompt({
             type: 'input',
             name: 'elevenLabs',
-            message: `You selected ${chalk.magenta.bold('Best Quality')}. This will require you to provide your ${chalk.yellow.bold('Eleven Labs API key')}.`,
+            message: `You selected ${chalk.magenta.bold('Best Quality')}. This will require you to provide your ${chalk.yellow.bold('Eleven Labs API key')}:`,
         })).elevenLabs;
     }
 
