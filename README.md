@@ -24,8 +24,15 @@ If you have any questions or feedback, please feel free to open an issue.
 - Interruptability
 - Function calling support (by default assistatnt call ending is supported)
 
-## Quick Start
-Clone this repo.
+# Quick Start
+
+## Option 1: npx create-voice-ai
+Simply run this command to create a new voice AI project.
+```
+npx create-voice-ai
+```
+
+## Option 2: Clone this repo.
 
 ### Start Web-app: 
 ```
