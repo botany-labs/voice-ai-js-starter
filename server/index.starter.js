@@ -38,7 +38,6 @@ server.on("connection", (ws, req) => {
     conversation.begin(2000);
 
     ws.on("close", () => {
-        clearTimeout(demoTimeout);
         console.log("Client disconnected", cid);
     });
 

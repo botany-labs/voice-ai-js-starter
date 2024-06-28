@@ -142,7 +142,7 @@ const MyAssistant = new Assistant(
     const indexJSContent = fs.readFileSync(`${dir}/server/index.starter.js`, 'utf8');
     const indexJSContentLines = indexJSContent.split('\n');
     const startIndex = indexJSContentLines.findIndex(line => line.includes('// ----------------------------'));
-    const endIndex = indexJSContentLines.findIndex(line => line.includes('// ----------------------------'));
+    const endIndex = indexJSContentLines.findIndex((line, idx) => idx > startIndex && line.includes('// ----------------------------'));
     const updatedIndexJSContent = indexJSContentLines.slice(0, startIndex).concat(replacementContent).concat(indexJSContentLines.slice(endIndex)).join('\n');
     fs.writeFileSync(`${dir}/server/index.js`, updatedIndexJSContent);
 
