@@ -12,13 +12,14 @@ const PORT = 8000;
 
 const server = new WebSocket.Server({ port: PORT });
 
-
+// ----------------------------
 const MyAssistant = new Assistant(
   `TODO: <Here write the prompt for your AI agent>`,
   {
     speakFirstOpeningMessage: "TODO: <Here write the first message your AI agent will speak>",
   }
 );
+// ----------------------------
 
 server.on("connection", (ws, req) => {
     const cid = req.headers["sec-websocket-key"];
