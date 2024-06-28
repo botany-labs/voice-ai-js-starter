@@ -1,0 +1,23 @@
+{
+  "name": "create-voice-app",
+  "version": "0.0.1",
+  "description": "Quickly bootstrap an AI-voice assistant",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/charlesyu108/voiceai-js-starter.git"
+  },
+  "author": "Charles Yu",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/charlesyu108/voiceai-js-starter/issues"
+  },
+  "homepage": "https://github.com/charlesyu108/voiceai-js-starter#readme",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "inquirer": "^8.0.0"
+  }
+}
