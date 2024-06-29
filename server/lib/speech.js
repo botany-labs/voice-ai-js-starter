@@ -346,39 +346,57 @@ class DeepgramRealtimeTranscriber {
   constructor(model, options={}) {
     this.model = model;
     this.deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
-    this.waitTimeAfterFirstChunk = options.waitTimeAfterFirstChunk ?? 200;
+    this.waitTimeAfterSend = options.waitTimeAfterFirstChunk ?? 1000;
     this._connection = null;
     this.connectionOpen = false;
     this.keepAlive = options.keepAlive ?? true;
     this.keepAliveInterval = setInterval(this.keepAliveLoop.bind(this), 5000);
-    // {ts: Time, text: Transcript}
-    this.transcriptBuffer = [];
     if (options.connectOnInit ?? false) {
       this.getConnection();
     }
   }
 
   async transcribe(model, float32_pcm16) {
-    // ignore model;
     const connection = await this.getConnection();
 
     if (!this.connectionOpen) {
       throw new Error("Deepgram connection not open");
     }
 
-    const submittedTime = Date.now();
     const aspcmInt16 = float32ToPCM16(float32_pcm16);
     connection.send(aspcmInt16);
-   
-   return await new Promise((resolve, reject) => {
-    connection.once(LiveTranscriptionEvents.Transcript, (data) => {
-      setTimeout(() => {
-        const transcription = this.transcriptBuffer?.filter((t) => t.ts > submittedTime).map((t) => t.text).join(" ");
-        this.transcriptBuffer = [];
-        resolve(transcription ?? '');
-      }, this.waitTimeAfterFirstChunk);
-    })
-   })
+
+    const collected = [];
+    let lastWasPending = false;
+
+    const createResult = () => {
+      return collected.join(" ");
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        resolve(createResult());
+      }, this.waitTimeAfterSend);
+
+      const handleTranscript = (data) => {
+
+        if (data.is_final && lastWasPending) {
+          collected[collected.length - 1] = data.channel.alternatives[0].transcript;
+        } else {
+          collected.push(data.channel.alternatives[0].transcript);
+        }
+        
+        lastWasPending = data.is_final;
+
+        if (data.speech_final) {
+          clearTimeout(timeoutId);
+          resolve(createResult());
+          connection.removeListener(LiveTranscriptionEvents.Transcript, handleTranscript);
+        }
+      };
+
+      connection.on(LiveTranscriptionEvents.Transcript, handleTranscript);
+    });
   }
 
   async getConnection() {
@@ -400,6 +418,9 @@ class DeepgramRealtimeTranscriber {
       interim_results: true,
       numerals: true,
       endpointing: 200,
+      vad_events: true,
+      interim_results: true,
+      utterance_end_ms: "1000",
     });
 
     try {
@@ -411,16 +432,21 @@ class DeepgramRealtimeTranscriber {
         promiseResolve(connection);
 
         connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-          const isFinal = data.is_final;
-          if (!isFinal) {
+          if (!data.is_final) {
+            console.log("Interim result:", data.channel.alternatives[0].transcript);
             return;
           }
+        
           const transcript = data.channel.alternatives.reduce((acc, alt) => {
             return acc + alt.transcript;
           }, "");
-          console.log("GOT", transcript);
-          this.transcriptBuffer.push({ts: Date.now(), text: transcript});
-        })
+          console.log("Final result:", transcript);
+        
+          if (data.speech_final) {
+            console.log("Speech final event received");
+          }
+        
+        });
   
         connection.on(LiveTranscriptionEvents.Close, () => {
           this.connectionOpen = false;
