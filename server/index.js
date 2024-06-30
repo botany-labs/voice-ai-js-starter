@@ -1,8 +1,8 @@
-const WebSocket = require("ws");
 const dotenv = require("dotenv");
-const { Assistant } = require("./lib/assistant");
-
 dotenv.config();
+
+const WebSocket = require("ws");
+const { Assistant } = require("./lib/assistant");
 
 const PORT = 8000;
 
