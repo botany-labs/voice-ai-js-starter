@@ -109,11 +109,11 @@ export default function App() {
   return (
     <main className="flex flex-col h-screen w-full max-w-lg mx-auto text-yellow-300 px-4 py-8">
       <div className="flex justify-center flex-col">
-        <a href="https://github.com/charlesyu108/voiceai-js-starter" target="_blank" className="flex items-center space-x-2 mb-2 group cursor-pointer w-fit">
+        <a href="https://github.com/botany-labs/voice-ai-js-starter" target="_blank" className="flex items-center space-x-2 mb-2 group cursor-pointer w-fit">
         <img className='w-6 h-6 rounded-full bg-yellow-300 group-hover:bg-yellow-100' src="/GitHub-Logo.svg"/>
         <h1 className="text-xl font-bold group-hover:text-yellow-100">
           {" "}
-          charlesyu108/voiceai-js-starter demo
+          botany-labs/voice-ai-js-starter demo
         </h1>
         </a>
         <p className="text-sm">For best results, use headphones.</p>
