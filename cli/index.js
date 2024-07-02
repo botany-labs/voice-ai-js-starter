@@ -5,9 +5,9 @@ const inquirer = require('inquirer');
 const fs = require('fs');
 
 async function main() {
-    console.log(chalk.green.bold("Welcome to the quickstart setup for charlesyu108/voiceai-js-starter!"));
+    console.log(chalk.green.bold("Welcome to the quickstart setup for botany-labs/voice-ai-js-starter!"));
     console.log(chalk.green("You're 30 seconds away from creating an amazing voice app.\n"));
-    console.log(chalk.magenta("For more help, see https://github.com/charlesyu108/voiceai-js-starter\n"));
+    console.log(chalk.magenta("For more help, see https://github.com/botany-labs/voice-ai-js-starter\n"));
 
     const answers = await inquirer.prompt([
         {
@@ -89,7 +89,7 @@ async function main() {
     execSync(`mkdir -p ${answers.directory}`, { stdio: 'inherit' });
 
     // Clone the web and server directories into the new directory
-    execSync(`git clone https://github.com/charlesyu108/voiceai-js-starter/ ${answers.directory}`, { stdio: 'inherit' });
+    execSync(`git clone https://github.com/botany-labs/voice-ai-js-starter/ ${answers.directory}`, { stdio: 'inherit' });
 
     // Remove unnecessary files and directories from the cloned project
     clearUnnecessaryFilesAndDirectoriesFromClonedProject(answers.directory);

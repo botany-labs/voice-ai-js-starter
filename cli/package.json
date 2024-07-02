@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/charlesyu108/voiceai-js-starter.git"
+    "url": "git+https://github.com/botany-labs/voice-ai-js-starter.git"
   },
   "author": "Charles Yu",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/charlesyu108/voiceai-js-starter/issues"
+    "url": "https://github.com/botany-labs/voice-ai-js-starter/issues"
   },
-  "homepage": "https://github.com/charlesyu108/voiceai-js-starter#readme",
+  "homepage": "https://github.com/botany-labs/voice-ai-js-starter#readme",
   "dependencies": {
     "chalk": "^4.1.2",
     "inquirer": "^8.0.0"
