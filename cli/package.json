@@ -1,6 +1,6 @@
 {
   "name": "create-voice-ai",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Quickly bootstrap an AI-voice assistant",
   "main": "index.js",
   "bin": {
