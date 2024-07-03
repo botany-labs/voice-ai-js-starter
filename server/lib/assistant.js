@@ -1,5 +1,6 @@
 const { TextToSpeech, SpeechToText } = require("./speech");
-const { CallConversation } = require("./call");
+const { Conversation } = require("./conversation");
+const { BrowserVADWebCall } = require("./call/browser-vad");
 const OpenAI = require("openai");
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -110,8 +111,9 @@ class Assistant {
    * @param {object} [options] - Options to give your assistant.
    */
   createConversation(ws, options={}) {
-    options.speechToTextModel = this.speechToTextModel;
-    return new CallConversation(this, ws, options);
+    const stt = new SpeechToText(this.speechToTextModel);
+    const call = new BrowserVADWebCall(ws, stt);
+    return new Conversation(this, call, options);
   }
 }
 
