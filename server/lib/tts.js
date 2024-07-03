@@ -1,9 +1,8 @@
 const fetch = require("node-fetch");
 const OpenAI = require("openai");
 const util = require("util");
-const { pcm16ToFloat32 } = require("./audio");
 const PlayHT = require("playht");
-const { createClient : Deepgram }  = require("@deepgram/sdk");
+const { createClient: Deepgram } = require("@deepgram/sdk");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -21,9 +20,13 @@ const TTS_MODELS = [
   "deepgram/aura",
 ];
 
+const TTS_AUDIO_FORMATS = {
+  PCM_24K: "pcm_24000",
+  MULAW_8K: "mulaw_8000",
+};
+
 class TextToSpeech {
-    
-  constructor(modelID, voice) {
+  constructor(modelID, voice, format = TTS_AUDIO_FORMATS.PCM_24K) {
     if (!TTS_MODELS.includes(modelID)) {
       throw new Error(`Unsupported TTS model: ${modelID}`);
     }
@@ -42,6 +45,7 @@ class TextToSpeech {
     })();
     this.model = model;
     this.voice = voice;
+    this.format = format;
 
     // Do check for creds
     if (provider === "elevenlabs") {
@@ -80,11 +84,10 @@ class TextToSpeech {
   /**
    * Synthesize a message into audio playable over the wire by our client.
    * @param {string} message - The message to synthesize
-   * @returns {Promise<Float32Array>} - The audio data - PCM. 24k sample rate, 16 bit depth, 1 channel
+   * @returns {Buffer | ArrayBuffer} - The audio data - PCM. 24k sample rate, 16 bit depth, 1 channel
    */
   async synthesize(message) {
-    const pcm = new Int16Array(await this.tts(message, this.model, this.voice));
-    return pcm16ToFloat32(pcm);
+    return this.tts(message, this.model, this.voice, this.format);
   }
 
   _parseModel(model) {
@@ -96,7 +99,7 @@ class TextToSpeech {
   }
 }
 
-async function tts_elevenlabs(message, model, voice) {
+async function tts_elevenlabs(message, model, voice, format) {
   const body = {
     text: message,
     model,
@@ -110,6 +113,11 @@ async function tts_elevenlabs(message, model, voice) {
   const query = {
     output_format: "pcm_24000",
   };
+
+  if (format === TTS_AUDIO_FORMATS.MULAW_8K) {
+    query.output_format = "ulaw_8000";
+  }
+
   const options = {
     method: "POST",
     headers: {
@@ -140,7 +148,7 @@ async function tts_elevenlabs(message, model, voice) {
   return audio;
 }
 
-async function tts_openai(message, model, voice) {
+async function tts_openai(message, model, voice, format) {
   const response = await openai.audio.speech.create({
     model,
     voice,
@@ -148,11 +156,15 @@ async function tts_openai(message, model, voice) {
     response_format: "pcm",
   });
 
+  if (format !== TTS_AUDIO_FORMATS.PCM_24K) {
+    throw new Error(`TODO: OpenAI unsupported audio format: ${format}`);
+  }
+
   const arrayBuffer = await response.arrayBuffer();
   return arrayBuffer;
 }
 
-async function tts_playhts(message, model, voice) {
+async function tts_playhts(message, model, voice, format) {
   PlayHT.init({
     userId: process.env.PLAYHT_USER_ID,
     apiKey: process.env.PLAYHT_API_KEY,
@@ -161,12 +173,19 @@ async function tts_playhts(message, model, voice) {
   const streamingOptions = {
     voiceEngine: model,
     voiceId: voice,
-    sampleRate: 24000,
-    // This is a hack because im not sure why "raw" sounds so weird. 
-    // With wav, we take off the first 44 bytes that make up the wav header
-    // and it's effectively pcm.
-    outputFormat: "wav",
     speed: 1,
+    ...(format === TTS_AUDIO_FORMATS.MULAW_8K
+      ? {
+          outputFormat: "mulaw",
+          sampleRate: 8000,
+        }
+      : {
+          // This is a hack because im not sure why "raw" sounds so weird.
+          // With wav, we take off the first 44 bytes that make up the wav header
+          // and it's effectively pcm.
+          outputFormat: "wav",
+          sampleRate: 24000,
+        }),
   };
   try {
     const stream = await PlayHT.stream(message, streamingOptions);
@@ -186,10 +205,14 @@ async function tts_playhts(message, model, voice) {
           final.set(chunk, offset);
           offset += chunk.length;
         }
-        // slice off first 44 bytes for wav header
-        const audio = final.slice(44);
+        if (format === TTS_AUDIO_FORMATS.PCM_24K) {
+         // slice off first 44 bytes for wav header
+          const audio = final.slice(44);
+          resolve(new Int16Array(audio.buffer));
+        } else {
+          resolve(final);
+        }
 
-        resolve(new Int16Array(audio.buffer));
       });
 
       stream.on("error", (err) => {
@@ -204,18 +227,20 @@ async function tts_playhts(message, model, voice) {
 
 // NOTE: Deepgram usese the format {model}-{voice}-{language} (i.e. aura-luna-en).
 // User should provide luna-en as the voice to use.
-const tts_deepgram = async (message, model, voice) => {
+const tts_deepgram = async (message, model, voice, format) => {
   const deepgram = Deepgram(process.env.DEEPGRAM_API_KEY);
 
-  const deepgramModel = model + '-' + voice;
+  const deepgramModel = model + "-" + voice;
   // NOTE: voice not applicable
-  const response = await deepgram.speak.request({text: message}, {
-    model: deepgramModel,
-    encoding: "linear16",
-    sample_rate: 24000,
-    container: "none",
-  });
-  
+  const response = await deepgram.speak.request(
+    { text: message },
+    {
+      model: deepgramModel,
+      encoding: format === TTS_AUDIO_FORMATS.PCM_24K ? "linear16" : "mulaw",
+      sample_rate: format === TTS_AUDIO_FORMATS.PCM_24K ? 24000 : 8000,
+      container: "none",
+    }
+  );
   const stream = await response.getStream();
   return new Promise(async (resolve, reject) => {
     try {
@@ -224,8 +249,7 @@ const tts_deepgram = async (message, model, voice) => {
         chunks.push(chunk);
       }
       resolve(new Int16Array(Buffer.concat(chunks).buffer));
-    }
-    catch (err) {
+    } catch (err) {
       reject(err);
     }
   });

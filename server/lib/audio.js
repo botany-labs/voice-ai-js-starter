@@ -65,7 +65,7 @@ function generateBeep(frequency, durationSeconds, sampleRate) {
     for (let i = 0; i < numSamples; i++) {
       buffer[i] = Math.sin(2 * Math.PI * frequency * (i / sampleRate)) * volume;
     }
-    return buffer;
+    return float32ToPCM16(buffer);
 }
 
 function float32_pcm16ToWavBlob(float32_pcm16) {
@@ -93,7 +93,7 @@ function float32_pcm16ToWavBlob(float32_pcm16) {
 }
 
 module.exports = {
-  float32_pcm16_to_wav_blob: float32_pcm16ToWavBlob,
+  float32_pcm16ToWavBlob,
   float32ToPCM16,
   pcm16ToFloat32,
   createWavHeader,

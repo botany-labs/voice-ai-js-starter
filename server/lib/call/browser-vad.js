@@ -3,6 +3,7 @@
 const { SpeechToText } = require("../stt");
 const { generateBeep } = require("../audio");
 const { Call, CallEvents } = require("../call");
+const { pcm16ToFloat32 } = require("../audio");
 
 const BrowserVADWebCallEvents = {
     SERVER_START_LISTENING: "RDY",
@@ -31,9 +32,12 @@ class BrowserVADWebCall extends Call {
       this.emit(CallEvents.CALL_ENDED);
       this.stt.destroy();
     });
+    this.pushAudio(generateBeep(440, 0.5, 24000));
   }
 
-  async pushAudio(audio_float32_24k_16bit_1channel) {
+  async pushAudio(raw_audio_as_pcm) {
+    const pcm = new Int16Array(raw_audio_as_pcm);
+    const audio_float32_24k_16bit_1channel = pcm16ToFloat32(pcm);
     for (let i = 0; i < audio_float32_24k_16bit_1channel.length; i += 1024) {
       this.ws.send(audio_float32_24k_16bit_1channel.slice(i, i + 1024));
     }
@@ -46,7 +50,6 @@ class BrowserVADWebCall extends Call {
   async indicateReady() {
     this.pushMeta("--- Assistant Ready ---");
     this.pushMeta(BrowserVADWebCallEvents.SERVER_START_LISTENING);
-    this.pushAudio(generateBeep(440, 0.5, 24000));
   }
 
   async end() {
