@@ -1,4 +1,5 @@
-const { TextToSpeech, SpeechToText } = require("./speech");
+const { TextToSpeech } = require ('./tts');
+const { SpeechToText } = require ('./stt');
 const { Conversation } = require("./conversation");
 const { BrowserVADWebCall } = require("./call/browser-vad");
 const OpenAI = require("openai");

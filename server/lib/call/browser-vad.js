@@ -1,6 +1,6 @@
 // Implementation of Call for a browser client that uses a browser-side VAD.
 
-const { SpeechToText } = require("../speech");
+const { SpeechToText } = require("../stt");
 const { generateBeep } = require("../audio");
 const { Call, CallEvents } = require("../call");
 
