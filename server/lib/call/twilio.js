@@ -24,6 +24,9 @@ class TwilioCall extends Call {
     });
 
     this.transcriber = this.setUpTranscriber();
+    this.assistantIsSpeaking = false;
+    this.assistantSpeakingTimer = null;
+    this.assistantInterruptionTimer = null;
   }
 
   async _onWebsocketMessage(message) {
@@ -93,27 +96,25 @@ class TwilioCall extends Call {
 
     connection.on(LiveTranscriptionEvents.Transcript, (data) => {
       if (!data.is_final) {
-        console.log("Interim result:", data.channel.alternatives[0].transcript);
         return;
       }
 
       const transcript = data.channel.alternatives.reduce((acc, alt) => {
         return acc + alt.transcript;
       }, "");
-      console.log("Final result:", transcript);
 
       if (data.speech_final) {
-        console.log("Speech final event received");
+        console.log("Speech final event received", transcript);
       }
       this.pendingTranscribedMessages.push(transcript);
     });
 
     connection.on(LiveTranscriptionEvents.SpeechStarted, () => {
       console.log("Speech started event received");
+      this._checkForInterruptions();
     });
 
     connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
-      console.log("Utterance end event received");
       const joined = this.pendingTranscribedMessages.join(" ");
       this.pendingTranscribedMessages = [];
       this.emit("userMessage", joined);
@@ -132,6 +133,8 @@ class TwilioCall extends Call {
   }
 
   async pushAudio(audioBuffer) {
+    const markName = `audio-${Date.now()}`;
+    this._updateSpeakingTracking(audioBuffer);
     const payload = Buffer.from(audioBuffer).toString("base64");
     const message = {
       event: "media",
@@ -142,11 +145,43 @@ class TwilioCall extends Call {
     };
 
     const messageJSON = JSON.stringify(message);
-    this.ws.sendUTF(messageJSON);
+    await this.ws.sendUTF(messageJSON);
+    await this.ws.sendUTF(JSON.stringify({ event: "mark", streamSid: this.streamSid, mark: { name: markName } }));
+  }
+
+
+  _updateSpeakingTracking(audioBuffer) {
+    const expectedDuration = this._computeAudioDuration(audioBuffer);
+    console.log("Expected Audio duration is", expectedDuration, "seconds");
+    this.assistantIsSpeaking = true;
+    clearTimeout(this.assistantSpeakingTimer);
+
+    this.assistantSpeakingTimer = setTimeout(() => {
+        console.log("Assistant is done speaking");
+        this.assistantIsSpeaking = false;
+    }, expectedDuration * 1000);
+  }
+
+  _computeAudioDuration(audioBuffer) {
+    return audioBuffer.length / (8000);
+  }
+
+  _checkForInterruptions() {
+    clearTimeout(this.assistantInterruptionTimer);
+    if (this.assistantIsSpeaking) {
+      this.assistantInterruptionTimer = setTimeout(() => {
+        if (this.assistantIsSpeaking) {
+          console.log("[Interruption detected!]");
+          this.emit(CallEvents.INTERRUPT);
+          this.ws.sendUTF(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
+          this.assistantIsSpeaking = false;
+        }
+      }, 500);
+    }
   }
 
   async pushMeta(metadata) {
-    console.warn("[TwilioCall] pushMeta not implemented");
+    // No-Op
   }
 
   async indicateReady() {
@@ -154,6 +189,7 @@ class TwilioCall extends Call {
   }
 
   async end() {
+    this.emit(CallEvents.END);
     this.ws.close();
   }
 }
