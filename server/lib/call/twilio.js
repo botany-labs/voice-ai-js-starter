@@ -1,6 +1,4 @@
 const { Call, CallEvents } = require("../call");
-var WebSocketServer = require("websocket").server;
-exports.WebSocketServer = WebSocketServer;
 const {
   createClient: Deepgram,
   LiveTranscriptionEvents,
@@ -24,6 +22,7 @@ class TwilioCall extends Call {
     });
 
     this.transcriber = this.setUpTranscriber();
+    this.userIsSpeaking = false;
     this.assistantIsSpeaking = false;
     this.assistantSpeakingTimer = null;
     this.assistantInterruptionTimer = null;
@@ -98,7 +97,7 @@ class TwilioCall extends Call {
       if (!data.is_final) {
         return;
       }
-
+      this.userIsSpeaking = true;
       const transcript = data.channel.alternatives.reduce((acc, alt) => {
         return acc + alt.transcript;
       }, "");
@@ -115,12 +114,14 @@ class TwilioCall extends Call {
     });
 
     connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
+      this.userIsSpeaking = false;
       const joined = this.pendingTranscribedMessages.join(" ");
       this.pendingTranscribedMessages = [];
       this.emit("userMessage", joined);
     });
 
     connection.on(LiveTranscriptionEvents.Close, () => {
+      this.userIsSpeaking = false;
       this.connectionOpen = false;
       console.log("Deepgram Live Connection closed.");
     });
@@ -147,11 +148,19 @@ class TwilioCall extends Call {
 
     const messageJSON = JSON.stringify(message);
     await this.ws.sendUTF(messageJSON);
-    await this.ws.sendUTF(JSON.stringify({ event: "mark", streamSid: this.streamSid, mark: { name: markName } }));
+    await this.ws.sendUTF(
+      JSON.stringify({
+        event: "mark",
+        streamSid: this.streamSid,
+        mark: { name: markName },
+      })
+    );
   }
 
   async _clearClientAudio() {
-    await this.ws.sendUTF(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
+    await this.ws.sendUTF(
+      JSON.stringify({ event: "clear", streamSid: this.streamSid })
+    );
   }
 
   _updateSpeakingTracking(audioBuffer) {
@@ -161,26 +170,26 @@ class TwilioCall extends Call {
     clearTimeout(this.assistantSpeakingTimer);
 
     this.assistantSpeakingTimer = setTimeout(() => {
-        console.log("Assistant is done speaking");
-        this.assistantIsSpeaking = false;
+      console.log("Assistant is done speaking");
+      this.assistantIsSpeaking = false;
     }, expectedDuration * 1000);
   }
 
   _computeAudioDuration(audioBuffer) {
-    return audioBuffer.length / (8000);
+    return audioBuffer.length / 8000;
   }
 
   _checkForInterruptions() {
     clearTimeout(this.assistantInterruptionTimer);
     if (this.assistantIsSpeaking) {
       this.assistantInterruptionTimer = setTimeout(() => {
-        if (this.assistantIsSpeaking) {
+        if (this.assistantIsSpeaking && this.userIsSpeaking) {
           console.log("[Interruption detected!]");
           this.emit(CallEvents.INTERRUPT);
           this._clearClientAudio();
           this.assistantIsSpeaking = false;
         }
-      }, 1000);
+      }, 2000);
     }
   }
 
