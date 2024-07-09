@@ -248,7 +248,11 @@ const tts_deepgram = async (message, model, voice, format) => {
       for await (const chunk of stream.values()) {
         chunks.push(chunk);
       }
-      resolve(new Int16Array(Buffer.concat(chunks).buffer));
+      if (format === TTS_AUDIO_FORMATS.PCM_24K) {
+        resolve(new Int16Array(Buffer.concat(chunks).buffer));
+      } else {
+        resolve(Buffer.concat(chunks));
+      }
     } catch (err) {
       reject(err);
     }
@@ -262,4 +266,5 @@ module.exports = {
   tts_playhts,
   tts_deepgram,
   TTS_MODELS,
+  TTS_AUDIO_FORMATS,
 };
