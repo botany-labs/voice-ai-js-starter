@@ -65,9 +65,13 @@ class Conversation {
             if (content) {
                 this.noteWhatWasSaid("assistant", content);
                 const audio = await this.assistant.textToSpeech(content);
-                this.call.pushAudio(audio);
+                if (selectedTool) {
+                    await this.call.pushAudio(audio);
+                } else {
+                    this.call.pushAudio(audio);
+                }
             }
-
+            
             if (selectedTool) {
                 this.addToCallLog("TOOL_SELECTED", {
                     tool: selectedTool,

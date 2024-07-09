@@ -1,4 +1,4 @@
-const { TextToSpeech } = require ('./tts');
+const { TextToSpeech, TTS_AUDIO_FORMATS } = require ('./tts');
 const { SpeechToText } = require ('./stt');
 const { Conversation } = require("./conversation");
 const { BrowserVADWebCall } = require("./call/browser-vad");
@@ -19,6 +19,7 @@ class Assistant {
    * @param {string} [options.llmModel] - LLM model to use. Defaults to "gpt-3.5-turbo".
    * @param {string} [options.voiceModel] - Voice model to use. Defaults to "openai/tts-1". See TTS_MODELS (./speech.js) for supported models.
    * @param {string} [options.voiceName] - Voice name to use. Defaults to "shimmer".
+   * @param {string} [options.ttsFormat] - TTS format to use. Defaults to TTS_AUDIO_FORMATS.PCM_24K.
    * @param {string} [options.speechToTextModel] - Speech-to-text model to use. Defaults to "openai/whisper-1". See SPEECH_TO_TEXT_MODELS (./speech.js) for supported models.
    * @param {string} [options.systemPrompt] - System prompt to give your assistant.
    * @param {string} [options.speakFirstOpeningMessage] - Opening message to give your assistant to say once the call starts. If not provided, the assistant will just be prompted to speak.
@@ -35,7 +36,7 @@ class Assistant {
     this.voiceModel = options.voiceModel ?? "openai/tts-1";
     this.voiceName = options.voiceName ?? "shimmer";
     this.speechToTextModel = options.speechToTextModel ?? "openai/whisper-1";
-    this.tts = new TextToSpeech(this.voiceModel, this.voiceName);
+    this.tts = new TextToSpeech(this.voiceModel, this.voiceName, options.ttsFormat ?? TTS_AUDIO_FORMATS.PCM_24K);
   }
 
   /**

@@ -43,7 +43,7 @@ class SpeechToText {
               "DEEPGRAM_API_KEY is required to use deepgram for SpeechToText"
             );
           }
-          const transcriber = new DeepgramRealtimeTranscriber(model, format, {keepAlive: true, connectOnInit: true});
+          const transcriber = new BatchedDeepgramRealtimeTranscriber(model, format, {keepAlive: true, connectOnInit: true});
           this.sttObject = transcriber;
           return transcriber.transcribe.bind(transcriber);
         case "openai":
@@ -127,7 +127,7 @@ async function transcribeWhisper(model, audio_sample, format) {
 }
 
 // TODO: Refactor to stream up audio in realtime instead of giving it all in the .transcribe.
-class DeepgramRealtimeTranscriber {
+class BatchedDeepgramRealtimeTranscriber {
   /**
    * @param {string} model - Deepgram model to use
    * @param {string} format - Audio format to use
