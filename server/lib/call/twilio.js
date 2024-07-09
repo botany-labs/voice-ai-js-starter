@@ -133,6 +133,7 @@ class TwilioCall extends Call {
   }
 
   async pushAudio(audioBuffer) {
+    await this._clearClientAudio();
     const markName = `audio-${Date.now()}`;
     this._updateSpeakingTracking(audioBuffer);
     const payload = Buffer.from(audioBuffer).toString("base64");
@@ -149,6 +150,9 @@ class TwilioCall extends Call {
     await this.ws.sendUTF(JSON.stringify({ event: "mark", streamSid: this.streamSid, mark: { name: markName } }));
   }
 
+  async _clearClientAudio() {
+    await this.ws.sendUTF(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
+  }
 
   _updateSpeakingTracking(audioBuffer) {
     const expectedDuration = this._computeAudioDuration(audioBuffer);
@@ -173,10 +177,10 @@ class TwilioCall extends Call {
         if (this.assistantIsSpeaking) {
           console.log("[Interruption detected!]");
           this.emit(CallEvents.INTERRUPT);
-          this.ws.sendUTF(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
+          this._clearClientAudio();
           this.assistantIsSpeaking = false;
         }
-      }, 500);
+      }, 1000);
     }
   }
 
