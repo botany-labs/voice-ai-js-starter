@@ -29,7 +29,9 @@ export default function App() {
   const streamer = useRef<Streamer | null>(null);
   const playback = useRef<Playback | null>(null);
   const lastEOS = useRef<Date | null>(null);
-  const [assistant, setAssistant] = useState<"fastest" | "best-quality" | "openai">("fastest");
+  const [assistant, setAssistant] = useState<
+    "fastest" | "best-quality" | "openai"
+  >("fastest");
 
   const stopRecording = (graceful: boolean = false) => {
     setIsRecording(false);
@@ -44,7 +46,7 @@ export default function App() {
     setIsRecording(true);
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       ws.current = new WebSocket(
-        SERVER_WS_URL + "?assistant=" + assistant ?? "default"
+        SERVER_WS_URL + "?assistant=" + (assistant || "default")
       );
       ws.current.binaryType = "arraybuffer";
       ws.current.onopen = () => {
@@ -109,12 +111,19 @@ export default function App() {
   return (
     <main className="flex flex-col h-screen w-full max-w-lg mx-auto text-yellow-300 px-4 py-8">
       <div className="flex justify-center flex-col">
-        <a href="https://github.com/botany-labs/voice-ai-js-starter" target="_blank" className="flex items-center space-x-2 mb-2 group cursor-pointer w-fit">
-        <img className='w-6 h-6 rounded-full bg-yellow-300 group-hover:bg-yellow-100' src="/GitHub-Logo.svg"/>
-        <h1 className="text-xl font-bold group-hover:text-yellow-100">
-          {" "}
-          botany-labs/voice-ai-js-starter demo
-        </h1>
+        <a
+          href="https://github.com/botany-labs/voice-ai-js-starter"
+          target="_blank"
+          className="flex items-center space-x-2 mb-2 group cursor-pointer w-fit"
+        >
+          <img
+            className="w-6 h-6 rounded-full bg-yellow-300 group-hover:bg-yellow-100"
+            src="/GitHub-Logo.svg"
+          />
+          <h1 className="text-xl font-bold group-hover:text-yellow-100">
+            {" "}
+            botany-labs/voice-ai-js-starter demo
+          </h1>
         </a>
         <p className="text-sm">For best results, use headphones.</p>
       </div>
@@ -144,14 +153,33 @@ export default function App() {
           >
             <option value="fastest"> Fastest </option>
             <option value="best-quality">Best Quality </option>
-            <option value="openai">OpenAI Only (decently fast, also multilinugal!)</option>
+            <option value="openai">
+              OpenAI Only (decently fast, also multilinugal!)
+            </option>
           </select>
         </div>
         <div className="text-yellow-100 text-sm w-full flex justify-center items-center">
-            {assistant === 'fastest' && <> TTS: Deepgram Nova-2 Streaming / STT: Deepgram Aura / LLM: ChatGPT 3.5 Turbo </>}
-            {assistant === 'best-quality' && <> TTS: OpenAI Whisper / STT: Elevenlabs Turbo V2 / LLM: ChatGPT 3.5 Turbo </>}
-            {assistant === 'openai' && <> TTS: OpenAI Whisper / STT: OpenAI TTS-1 / LLM: ChatGPT 3.5 Turbo </>}
-          </div>
+          {assistant === "fastest" && (
+            <>
+              {" "}
+              TTS: Deepgram Nova-2 Streaming / STT: Deepgram Aura / LLM: ChatGPT
+              3.5 Turbo{" "}
+            </>
+          )}
+          {assistant === "best-quality" && (
+            <>
+              {" "}
+              TTS: OpenAI Whisper / STT: Elevenlabs Turbo V2 / LLM: ChatGPT 3.5
+              Turbo{" "}
+            </>
+          )}
+          {assistant === "openai" && (
+            <>
+              {" "}
+              TTS: OpenAI Whisper / STT: OpenAI TTS-1 / LLM: ChatGPT 3.5 Turbo{" "}
+            </>
+          )}
+        </div>
       </div>
       <Logs />
     </main>
